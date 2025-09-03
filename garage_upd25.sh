@@ -20,7 +20,9 @@ fi
 CUSTOM_NODES=(
   "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
   "https://github.com/christian-byrne/audio-separation-nodes-comfyui"
-  # "https://github.com/ltdrdata/ComfyUI-Manager"
+  "https://github.com/kijai/ComfyUI-WanVideoWrapper"
+  "https://github.com/kijai/ComfyUI-KJNodes.git"
+
 )
 
 # Модели
@@ -111,6 +113,12 @@ clone_custom_nodes() {
     else
       log "Node already exists: $dir — pulling updates"
       (cd "$dir" && git pull --ff-only 2>&1 | tee -a "$PROVISION_LOG" || true)
+    fi
+
+    # Проверка и установка requirements.txt, если он есть
+    if [ -f "$dir/requirements.txt" ]; then
+      log "Installing Python packages from $dir/requirements.txt"
+      /opt/micromamba/envs/comfyui/bin/pip install --upgrade -r "$dir/requirements.txt"
     fi
   done
 }
