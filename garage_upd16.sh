@@ -76,7 +76,7 @@ function verify_installations() {
     local PY="/opt/micromamba/envs/comfyui/bin/python"
     "$PY" - << 'PYEOF'
 import numpy, diffusers, librosa, git, cv2, av, moviepy, toml
-v = numpy.version
+v = numpy.__version__   # <-- fixed: use string version
 assert v.startswith('1.'), f'Incorrect NumPy version: {v}'
 print('✅ NumPy version OK:', v)
 print('✅ diffusers OK')
