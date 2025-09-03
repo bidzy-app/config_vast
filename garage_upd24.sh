@@ -11,8 +11,9 @@ exec > >(tee -a "$PROVISION_LOG") 2>&1
 # Принимаем несколько имен переменных для токена
 HF_TOKEN="${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-${HUGGINGFACEHUB_API_TOKEN:-}}}"
 if [ -z "${HF_TOKEN}" ]; then
-  echo "HF_TOKEN is not set. Exiting."
-  exit 1
+echo "HF_TOKEN is not set. Continuing without authentication (public files only)."
+else
+echo "HF_TOKEN detected; will be used if anonymous download fails."
 fi
 
 # Кастомные ноды (пример)
@@ -67,19 +68,36 @@ create_directories() {
 }
 
 provisioning_download() {
-  local url="$1"; local dest="$2"
-  mkdir -p "$dest"
-  log "Starting download: $url -> $dest"
-  wget --header="Authorization: Bearer $HF_TOKEN" \
-    -nc --content-disposition --show-progress \
-    -P "$dest" "$url" 2>&1 | tee -a "$PROVISION_LOG"
-  local rc=${PIPESTATUS[0]:-0}
-  if [ $rc -ne 0 ]; then
-    log "ERROR: download failed: $url (exit $rc)"
-    return $rc
-  fi
-  log "Finished download: $url"
+    local url="$1"
+    local dest="$2"
+
+    mkdir -p "$dest"
+    log "Starting download: $url -> $dest"
+
+    # Сначала пробуем анонимно
+    if wget -nc --content-disposition --show-progress -P "$dest" "$url"; then
+        log "Finished download (anon): $url"
+        return 0
+    fi
+
+    # Если есть токен — пробуем с ним
+    if [ -n "$HF_TOKEN" ]; then
+        log "Retrying with token: $url"
+        wget --header="Authorization: Bearer $HF_TOKEN" \
+             -nc --content-disposition --show-progress -P "$dest" "$url"
+        local rc=$?
+        if [ $rc -ne 0 ]; then
+            log "ERROR: download failed with token: $url (exit $rc)"
+            return $rc
+        fi
+        log "Finished download (token): $url"
+        return 0
+    fi
+
+    log "ERROR: download failed (anon) and no token available: $url"
+    return 1
 }
+
 
 clone_custom_nodes() {
   mkdir -p "$COMFY_ROOT/custom_nodes"
