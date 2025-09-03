@@ -1,6 +1,13 @@
 ```bash
 ...existing code...
 
+CUSTOM_NODES=(
+    "https://github.com/kijai/ComfyUI-WanVideoWrapper"
+    "https://github.com/kijai/ComfyUI-KJNodes"
+    "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+    "https://github.com/christian-byrne/audio-separation-nodes-comfyui"
+)
+
 function install_python_packages() {
     if [ ${#PYTHON_PACKAGES[@]} -gt 0 ]; then
         echo "[INFO] Installing additional Python packages..."
@@ -63,6 +70,9 @@ function ensure_worker_port_env() {
     fi
 }
 
+# массив для найденных requirements
+NODE_REQUIREMENTS=()
+
 # restore/install custom nodes function (clone + install requirements)
 function install_custom_nodes() {
     # ensure target dir exists
@@ -70,26 +80,54 @@ function install_custom_nodes() {
     cd /workspace/ComfyUI/custom_nodes
     for repo in "${CUSTOM_NODES[@]}"; do
         local dir="${repo##*/}"
+        if [[ "$dir" == *.git ]]; then
+            dir="${dir%.git}"
+        fi
         if [ ! -d "$dir" ]; then
             echo "[INFO] Cloning node: $repo"
             git clone "$repo" "$dir" --depth 1 || git clone "$repo" "$dir"
-            # install node requirements if present (use micromamba environment if available)
-            if [ -f "$dir/requirements.txt" ]; then
-                if command -v micromamba >/dev/null 2>&1; then
-                    micromamba -n comfyui run pip install -r "$dir/requirements.txt" || true
-                else
-                    pip install -r "$dir/requirements.txt" || true
-                fi
-            fi
         else
             echo "[INFO] Node already exists: $dir"
-            # try updating if AUTO_UPDATE enabled
             if [[ ${AUTO_UPDATE,,} != "false" ]]; then
                 echo "[INFO] Updating node: $dir"
                 ( cd "$dir" && git pull --quiet ) || true
             fi
         fi
+
+        # check for requirements after clone/update
+        req_path="$dir/requirements.txt"
+        if [ -f "$req_path" ]; then
+            echo "[INFO] Found requirements for node $dir -> $req_path"
+            NODE_REQUIREMENTS+=("$req_path")
+            # attempt to install using micromamba if available, else pip
+            if command -v micromamba >/dev/null 2>&1; then
+                micromamba -n comfyui run pip install -r "$req_path" || true
+            else
+                pip install -r "$req_path" || true
+            fi
+        else
+            echo "[INFO] No requirements.txt for node $dir"
+        fi
     done
+}
+
+# create combined requirements file and print summary
+function summarize_node_requirements() {
+    combined="/workspace/ComfyUI/combined-requirements.txt"
+    : > "$combined"
+    if [ ${#NODE_REQUIREMENTS[@]} -eq 0 ]; then
+        echo "[INFO] No node requirements found."
+        return 0
+    fi
+    echo "[INFO] Aggregating ${#NODE_REQUIREMENTS[@]} requirements files to $combined"
+    for r in "${NODE_REQUIREMENTS[@]}"; do
+        echo "# --- from: $r ---" >> "$combined"
+        wc -l "$r" 2>/dev/null | awk '{print "[LINES] "$1" "$2}' >> /workspace/ComfyUI/requirements_summary.txt || true
+        sed -n '1,200p' "$r" >> "$combined"   # limit to first 200 lines per file for safety
+        echo "" >> "$combined"
+    done
+    echo "[INFO] Combined requirements saved to: $combined"
+    echo "[INFO] To review: cat $combined"
 }
 
 ### Основной запуск ###
@@ -99,7 +137,8 @@ function provisioning_start() {
     create_directories
     ensure_worker_port_env
     install_python_packages
-    install_custom_nodes          # <-- восстановлено: установка нод перед скачиванием моделей
+    install_custom_nodes          # <-- установка нод перед скачиванием моделей
+    summarize_node_requirements   # <-- сводка по requirements нод
     provisioning_download "/workspace/ComfyUI/models/diffusion_models" "${DIFFUSION_MODELS[@]}"
     provisioning_download "/workspace/ComfyUI/models/vae" "${VAE_MODELS[@]}"
     provisioning_download "/workspace/ComfyUI/models/text_encoders" "${TEXT_ENCODERS[@]}"
