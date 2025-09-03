@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Этот файл должен выполняться в init.sh (CPU provisioning stage)
-# GPU запустится только после завершения всех установок
+# This file should be executed in init.sh (CPU provisioning stage)
+# GPU will start only after all installations are complete
 
 if [ -z "${HF_TOKEN}" ]; then
     echo "HF_TOKEN is not set. Exiting."
@@ -10,7 +10,7 @@ fi
 
 CUSTOM_NODES=(
     "https://github.com/kijai/ComfyUI-WanVideoWrapper"
-    "https://github.com/kijai/ComfyUI-KJNodes"
+    # "https://github.com/kijai/ComfyUI-KJNodes" # Temporarily removed due to incompatibility
     "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
     "https://github.com/christian-byrne/audio-separation-nodes-comfyui"
     "https://github.com/ltdrdata/ComfyUI-Manager"
@@ -37,17 +37,17 @@ LORA_MODELS=(
     "https://huggingface.co/lightx2v/Wan2.1-I2V-14B-480P-StepDistill-CfgDistill-Lightx2v/resolve/main/loras/Wan21_I2V_14B_lightx2v_cfg_step_distill_lora_rank64.safetensors"
 )
 
-# Add packages needed by custom nodes
+# Add packages needed by custom nodes with corrected versions
 PYTHON_PACKAGES=(
+    "numpy<2"
     "opencv-python-headless==4.7.0.72"
     "diffusers"
     "comfy"
     "librosa"
-    "gitpython"
-    "numpy<2"
+    "GitPython"
 )
 
-### Вспомогательные функции ###
+### Helper Functions ###
 
 function provisioning_print_header() {
     printf "\n##############################################\n"
@@ -64,25 +64,19 @@ function create_directories() {
     mkdir -p /workspace/ComfyUI/custom_nodes
 }
 
-# Download from $1 URL to $2 directory (matches working example)
 function provisioning_download() {
-    # $1 = url, $2 = dest dir
     wget --header="Authorization: Bearer $HF_TOKEN" -qnc --content-disposition --show-progress -P "$2" "$1"
 }
 
-# Ensure VAST_TCP_PORT_3000 exists to avoid pyworker KeyError
 function ensure_worker_port_env() {
     if [ -z "${VAST_TCP_PORT_3000+x}" ]; then
-        # try a few common candidate envs
         for candidate in 18288 18188 40440 40440; do
             varname="VAST_TCP_PORT_${candidate}"
             if [ ! -z "${!varname}" ]; then
                 echo "[INFO] Setting VAST_TCP_PORT_3000=${!varname} (from ${varname})"
-                # try to persist to /etc/environment only if writable
                 if [ -w /etc/environment ] 2>/dev/null || touch /etc/environment 2>/dev/null; then
                     echo "VAST_TCP_PORT_3000=${!varname}" >> /etc/environment || true
                 else
-                    # fallback: persist in workspace so other processes can source it
                     mkdir -p /workspace
                     echo "VAST_TCP_PORT_3000=${!varname}" > /workspace/VAST_TCP_PORT_3000.env || true
                     echo "[WARN] Cannot write /etc/environment, wrote to /workspace/VAST_TCP_PORT_3000.env instead"
@@ -97,7 +91,6 @@ function ensure_worker_port_env() {
     fi
 }
 
-# Robust installer: try micromamba with retries on lock errors, fallback to pip
 function safe_micromamba_install() {
     pkgs=("$@")
     if command -v micromamba >/dev/null 2>&1; then
@@ -105,11 +98,9 @@ function safe_micromamba_install() {
         max=6
         wait_s=5
         while [ $tries -lt $max ]; do
-            # capture output to detect lock errors
             if micromamba -n comfyui run ${PIP_INSTALL} "${pkgs[@]}" 2>&1 | tee /tmp/micromamba_install.log; then
                 return 0
             fi
-            # If lock-related error detected, break and fallback to pip
             if grep -qiE "lock|Could not open lockfile|LockFile acquisition failed" /tmp/micromamba_install.log 2>/dev/null; then
                 echo "[WARN] micromamba lock error detected, skipping micromamba and using pip fallback"
                 break
@@ -129,7 +120,6 @@ function safe_micromamba_install() {
     fi
 }
 
-# Clone nodes only (no per-node pip yet)
 function clone_custom_nodes() {
     mkdir -p /workspace/ComfyUI/custom_nodes
     cd /workspace/ComfyUI/custom_nodes
@@ -149,7 +139,6 @@ function clone_custom_nodes() {
     done
 }
 
-# After base packages installed, install node-specific requirements if present
 function install_node_requirements() {
     cd /workspace/ComfyUI/custom_nodes
     for d in */ ; do
@@ -166,25 +155,23 @@ function install_node_requirements() {
     done
 }
 
-# Install python packages (use micromamba like in working example, fallback to pip)
 function install_python_packages() {
     if [ ${#PYTHON_PACKAGES[@]} -gt 0 ]; then
         echo "[INFO] Installing additional Python packages..."
         if command -v micromamba >/dev/null 2>&1; then
-            micromamba -n comfyui run ${PIP_INSTALL} ${PYTHON_PACKAGES[*]} || true
+            micromamba -n comfyui run ${PIP_INSTALL} "${PYTHON_PACKAGES[@]}" || true
         else
             pip install --no-cache-dir "${PYTHON_PACKAGES[@]}" || true
         fi
     fi
 }
 
-### Основной запуск ###
+### Main Execution ###
 
 function provisioning_start() {
     provisioning_print_header
     create_directories
 
-    # if previous run saved the port file in workspace, source it so env is available
     if [ -f /workspace/VAST_TCP_PORT_3000.env ]; then
         echo "[INFO] Sourcing /workspace/VAST_TCP_PORT_3000.env"
         # shellcheck disable=SC1090
@@ -192,17 +179,10 @@ function provisioning_start() {
     fi
 
     ensure_worker_port_env
-
-    # clone nodes first (no installs) so files exist
     clone_custom_nodes
-
-    # install base python packages (numpy<2, diffusers, comfy, librosa, cv2 headless ...)
     install_python_packages
-
-    # then install per-node requirements (they may depend on base packages)
     install_node_requirements
 
-    # download models (call provisioning_download per-url like in working example)
     for url in "${DIFFUSION_MODELS[@]}"; do
         provisioning_download "$url" "/workspace/ComfyUI/models/diffusion_models"
     done
