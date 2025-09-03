@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Этот файл должен выполняться в init.sh (CPU provisioning stage)
 # GPU запустится только после завершения всех установок
@@ -38,7 +39,12 @@ LORA_MODELS=(
 )
 
 PYTHON_PACKAGES=(
-    # "opencv-python==4.7.0.72"
+    "opencv-python-headless==4.7.0.72"
+    "diffusers"
+    "comfy"
+    "librosa"
+    "gitpython"
+    "numpy<2"
 )
 
 ### Вспомогательные функции ###
@@ -86,6 +92,7 @@ function install_custom_nodes() {
 
 function install_python_packages() {
     if [ ${#PYTHON_PACKAGES[@]} -gt 0 ]; then
+        echo "[INFO] Installing additional Python packages..."
         micromamba -n comfyui run pip install "${PYTHON_PACKAGES[@]}"
     fi
 }
