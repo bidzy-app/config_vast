@@ -43,7 +43,6 @@ PYTHON_PACKAGES=(
     "numpy<2"
     "opencv-python-headless==4.7.0.72"
     "diffusers"
-    "comfy"
     "librosa"
     "GitPython"
 )
@@ -70,15 +69,19 @@ function provisioning_download() {
 }
 
 function clone_custom_nodes() {
-    cd /workspace/ComfyUI/custom_custom_nodes || exit
+    mkdir -p /workspace/ComfyUI/custom_nodes
+    cd /workspace/ComfyUI/custom_nodes
+
     for repo in "${CUSTOM_NODES[@]}"; do
         dir="${repo##*/}"
         dir="${dir%.git}"
+
         if [ ! -d "$dir" ]; then
             echo "[INFO] Cloning: $repo"
             git clone "$repo" "$dir" --depth 1 || git clone "$repo" "$dir"
         else
             echo "[INFO] Node already exists: $dir"
+            (cd "$dir" && git pull --ff-only || true)
         fi
     done
 }
@@ -87,7 +90,7 @@ function install_python_packages() {
     if [ ${#PYTHON_PACKAGES[@]} -gt 0 ]; then
         echo "[INFO] Installing additional Python packages..."
         # This command will now exit on failure
-        micromamba -n comfyui run ${PIP_INSTALL} --no-cache-dir "${PYTHON_PACKAGES[@]}"
+        micromamba -n comfyui run pip install --no-cache-dir "${PYTHON_PACKAGES[@]}"
     fi
 }
 

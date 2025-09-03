@@ -12,7 +12,7 @@ PYWORKER_LOG="$WORKSPACE_DIR/pyworker.log"
 REPORT_ADDR="${REPORT_ADDR:-https://cloud.vast.ai/api/v0,https://run.vast.ai}"
 USE_SSL="${USE_SSL:-true}"
 WORKER_PORT="${WORKER_PORT:-3000}"
-INTERNAL_PORT=18288   # внутренний порт ComfyUI
+INTERNAL_PORT=18188   # внутренний порт ComfyUI
 
 mkdir -p "$WORKSPACE_DIR"
 cd "$WORKSPACE_DIR"
