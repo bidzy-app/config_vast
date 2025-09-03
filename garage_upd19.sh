@@ -2,8 +2,8 @@
 set -e
 
 # --- new: central provisioning log (tee -> file and stdout) ---
-PROVISION_LOG="/workspace/ComfyUI/provisioning.log"
-mkdir -p /workspace/ComfyUI
+PROVISION_LOG="/opt/ComfyUI/provisioning.log"
+mkdir -p /opt/ComfyUI
 # Redirect all stdout/stderr to both console and provisioning log
 exec > >(tee -a "$PROVISION_LOG") 2>&1
 # --- end new ---
@@ -39,7 +39,7 @@ function provisioning_print_end() {
 }
 
 function create_directories() {
-    mkdir -p /workspace/ComfyUI/models/{diffusion_models,vae,text_encoders,clip_vision,loras} /workspace/ComfyUI/custom_nodes
+    mkdir -p /opt/ComfyUI/models/{diffusion_models,vae,text_encoders,clip_vision,loras} /opt/ComfyUI/custom_nodes
 }
 
 function log() {
@@ -61,8 +61,8 @@ function provisioning_download() {
 }
 
 function clone_custom_nodes() {
-    mkdir -p /workspace/ComfyUI/custom_nodes
-    cd /workspace/ComfyUI/custom_nodes
+    mkdir -p /opt/ComfyUI/custom_nodes
+    cd /opt/ComfyUI/custom_nodes
     for repo in "${CUSTOM_NODES[@]}"; do
         dir="${repo##*/}"; dir="${dir%.git}"
         if [ ! -d "$dir" ]; then
@@ -118,11 +118,11 @@ function provisioning_start() {
     clone_custom_nodes
     install_python_packages
     verify_installations
-    for url in "${DIFFUSION_MODELS[@]}"; do provisioning_download "$url" "/workspace/ComfyUI/models/diffusion_models"; done
-    for url in "${VAE_MODELS[@]}"; do provisioning_download "$url" "/workspace/ComfyUI/models/vae"; done
-    for url in "${TEXT_ENCODERS[@]}"; do provisioning_download "$url" "/workspace/ComfyUI/models/text_encoders"; done
-    for url in "${CLIP_VISION_MODELS[@]}"; do provisioning_download "$url" "/workspace/ComfyUI/models/clip_vision"; done
-    for url in "${LORA_MODELS[@]}"; do provisioning_download "$url" "/workspace/ComfyUI/models/loras"; done
+    for url in "${DIFFUSION_MODELS[@]}"; do provisioning_download "$url" "/opt/ComfyUI/models/diffusion_models"; done
+    for url in "${VAE_MODELS[@]}"; do provisioning_download "$url" "/opt/ComfyUI/models/vae"; done
+    for url in "${TEXT_ENCODERS[@]}"; do provisioning_download "$url" "/opt/ComfyUI/models/text_encoders"; done
+    for url in "${CLIP_VISION_MODELS[@]}"; do provisioning_download "$url" "/opt/ComfyUI/models/clip_vision"; done
+    for url in "${LORA_MODELS[@]}"; do provisioning_download "$url" "/opt/ComfyUI/models/loras"; done
     provisioning_print_end
     log "Provisioning log saved to: $PROVISION_LOG"
 }
