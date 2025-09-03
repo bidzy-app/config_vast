@@ -1,39 +1,41 @@
 #!/bin/bash
 set -e
 
-# Этот файл должен выполняться в init.sh (CPU provisioning stage)
-# GPU запустится только после завершения всех установок
-
+# Проверка токена HuggingFace
 if [ -z "${HF_TOKEN}" ]; then
     echo "HF_TOKEN is not set. Exiting."
     exit 1
 fi
 
+# Директории для моделей и кастомных узлов
+WORKSPACE_DIR="${WORKSPACE:-/workspace}"
+COMFY_DIR="${WORKSPACE_DIR}/ComfyUI"
+mkdir -p "${COMFY_DIR}/models"/{diffusion_models,vae,text_encoders,clip_vision,loras}
+mkdir -p "${COMFY_DIR}/custom_nodes"
+
+# Узлы ComfyUI
 CUSTOM_NODES=(
     "https://github.com/kijai/ComfyUI-WanVideoWrapper"
     "https://github.com/kijai/ComfyUI-KJNodes"
-    "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+    "https://github.com/kijai/ComfyUI-VideoHelperSuite"
     "https://github.com/christian-byrne/audio-separation-nodes-comfyui"
     "https://github.com/ltdrdata/ComfyUI-Manager"
 )
 
+# Модели
 DIFFUSION_MODELS=(
     "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/InfiniteTalk/Wan2_1-InfiniTetalk-Single_fp16.safetensors"
     "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors"
 )
-
 VAE_MODELS=(
     "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1_VAE_bf16.safetensors"
 )
-
 TEXT_ENCODERS=(
     "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/umt5-xxl-enc-fp8_e4m3fn.safetensors"
 )
-
 CLIP_VISION_MODELS=(
     "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors"
 )
-
 LORA_MODELS=(
     "https://huggingface.co/lightx2v/Wan2.1-I2V-14B-480P-StepDistill-CfgDistill-Lightx2v/resolve/main/loras/Wan21_I2V_14B_lightx2v_cfg_step_distill_lora_rank64.safetensors"
 )
@@ -47,35 +49,20 @@ PYTHON_PACKAGES=(
     "numpy<2"
 )
 
-### Вспомогательные функции ###
-
-function provisioning_print_header() {
-    printf "\n##############################################\n"
-    printf "#      Provisioning container (CPU stage)     #\n"
-    printf "##############################################\n\n"
-}
-
-function provisioning_print_end() {
-    printf "\nProvisioning complete: Web UI will start now (GPU stage)\n\n"
-}
-
-function create_directories() {
-    mkdir -p /workspace/ComfyUI/models/{diffusion_models,vae,text_encoders,clip_vision,loras}
-    mkdir -p /workspace/ComfyUI/custom_nodes
-}
-
-function provisioning_download() {
+# Функция скачивания моделей
+function download_models() {
     local dir="$1"
     shift
     mkdir -p "$dir"
     for url in "$@"; do
         echo "[INFO] Downloading: $url"
-        wget --header="Authorization: Bearer $HF_TOKEN" -qnc --content-disposition -P "$dir" "$url"
+        wget --header="Authorization: Bearer $HF_TOKEN" -qnc --show-progress -P "$dir" "$url"
     done
 }
 
+# Скачивание кастомных узлов
 function install_custom_nodes() {
-    cd /workspace/ComfyUI/custom_nodes
+    cd "${COMFY_DIR}/custom_nodes"
     for repo in "${CUSTOM_NODES[@]}"; do
         local dir="${repo##*/}"
         if [ ! -d "$dir" ]; then
@@ -90,6 +77,7 @@ function install_custom_nodes() {
     done
 }
 
+# Установка Python пакетов
 function install_python_packages() {
     if [ ${#PYTHON_PACKAGES[@]} -gt 0 ]; then
         echo "[INFO] Installing additional Python packages..."
@@ -97,19 +85,12 @@ function install_python_packages() {
     fi
 }
 
-### Основной запуск ###
-
-function provisioning_start() {
-    provisioning_print_header
-    create_directories
-    install_python_packages
-    install_custom_nodes
-    provisioning_download "/workspace/ComfyUI/models/diffusion_models" "${DIFFUSION_MODELS[@]}"
-    provisioning_download "/workspace/ComfyUI/models/vae" "${VAE_MODELS[@]}"
-    provisioning_download "/workspace/ComfyUI/models/text_encoders" "${TEXT_ENCODERS[@]}"
-    provisioning_download "/workspace/ComfyUI/models/clip_vision" "${CLIP_VISION_MODELS[@]}"
-    provisioning_download "/workspace/ComfyUI/models/loras" "${LORA_MODELS[@]}"
-    provisioning_print_end
-}
-
-provisioning_start
+echo "[INFO] Starting provisioning..."
+install_python_packages
+install_custom_nodes
+download_models "${COMFY_DIR}/models/diffusion_models" "${DIFFUSION_MODELS[@]}"
+download_models "${COMFY_DIR}/models/vae" "${VAE_MODELS[@]}"
+download_models "${COMFY_DIR}/models/text_encoders" "${TEXT_ENCODERS[@]}"
+download_models "${COMFY_DIR}/models/clip_vision" "${CLIP_VISION_MODELS[@]}"
+download_models "${COMFY_DIR}/models/loras" "${LORA_MODELS[@]}"
+echo "[INFO] Provisioning complete. You can now start ComfyUI."
