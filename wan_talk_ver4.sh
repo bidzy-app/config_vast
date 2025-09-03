@@ -63,6 +63,35 @@ function ensure_worker_port_env() {
     fi
 }
 
+# restore/install custom nodes function (clone + install requirements)
+function install_custom_nodes() {
+    # ensure target dir exists
+    mkdir -p /workspace/ComfyUI/custom_nodes
+    cd /workspace/ComfyUI/custom_nodes
+    for repo in "${CUSTOM_NODES[@]}"; do
+        local dir="${repo##*/}"
+        if [ ! -d "$dir" ]; then
+            echo "[INFO] Cloning node: $repo"
+            git clone "$repo" "$dir" --depth 1 || git clone "$repo" "$dir"
+            # install node requirements if present (use micromamba environment if available)
+            if [ -f "$dir/requirements.txt" ]; then
+                if command -v micromamba >/dev/null 2>&1; then
+                    micromamba -n comfyui run pip install -r "$dir/requirements.txt" || true
+                else
+                    pip install -r "$dir/requirements.txt" || true
+                fi
+            fi
+        else
+            echo "[INFO] Node already exists: $dir"
+            # try updating if AUTO_UPDATE enabled
+            if [[ ${AUTO_UPDATE,,} != "false" ]]; then
+                echo "[INFO] Updating node: $dir"
+                ( cd "$dir" && git pull --quiet ) || true
+            fi
+        fi
+    done
+}
+
 ### Основной запуск ###
 
 function provisioning_start() {
@@ -70,7 +99,7 @@ function provisioning_start() {
     create_directories
     ensure_worker_port_env
     install_python_packages
-    install_custom_nodes
+    install_custom_nodes          # <-- восстановлено: установка нод перед скачиванием моделей
     provisioning_download "/workspace/ComfyUI/models/diffusion_models" "${DIFFUSION_MODELS[@]}"
     provisioning_download "/workspace/ComfyUI/models/vae" "${VAE_MODELS[@]}"
     provisioning_download "/workspace/ComfyUI/models/text_encoders" "${TEXT_ENCODERS[@]}"
@@ -80,5 +109,6 @@ function provisioning_start() {
 }
 
 provisioning_start
+
 ...existing code...
 ```
