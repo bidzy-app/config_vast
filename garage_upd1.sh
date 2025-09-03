@@ -87,11 +87,18 @@ function clone_custom_nodes() {
 }
 
 function install_python_packages() {
-    if [ ${#PYTHON_PACKAGES[@]} -gt 0 ]; then
-        echo "[INFO] Installing additional Python packages..."
-        # This command will now exit on failure
-        micromamba -n comfyui run pip install --no-cache-dir "${PYTHON_PACKAGES[@]}"
-    fi
+    local PIP="/opt/micromamba/envs/comfyui/bin/pip"
+    echo "[INFO] Installing additional Python packages (direct pip)..."
+
+    "$PIP" install --upgrade --no-cache-dir \
+        "numpy<2,>=1.26.4" \
+        "opencv-python-headless==4.7.0.72" \
+        diffusers \
+        librosa \
+        GitPython \
+        imageio[ffmpeg] \
+        imageio-ffmpeg \
+        soundfile
 }
 
 function verify_installations() {
