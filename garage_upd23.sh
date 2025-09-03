@@ -133,12 +133,12 @@ provisioning_start() {
   clone_custom_nodes
   install_python_packages
   verify_installations
-  for url in "${DIFFUSION_MODELS[@]}"; do provisioning_download "\$url" "$COMFY_ROOT/models/checkpoints"; done
+  # CORRECTED LINE BELOW
+  for url in "${DIFFUSION_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/checkpoints"; done
   for url in "${VAE_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/vae"; done
   for url in "${TEXT_ENCODERS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/text_encoders"; done
   for url in "${CLIP_VISION_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/clip_vision"; done
   for url in "${LORA_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/loras"; done
-
   provisioning_print_end
   log "Provisioning log saved to: $PROVISION_LOG"
 }
