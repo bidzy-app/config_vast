@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 
+# --- new: central provisioning log (tee -> file and stdout) ---
+PROVISION_LOG="/workspace/ComfyUI/provisioning.log"
+mkdir -p /workspace/ComfyUI
+# Redirect all stdout/stderr to both console and provisioning log
+exec > >(tee -a "$PROVISION_LOG") 2>&1
+# --- end new ---
+
 if [ -z "${HF_TOKEN}" ]; then
     echo "HF_TOKEN is not set. Exiting."
     exit 1
@@ -35,8 +42,22 @@ function create_directories() {
     mkdir -p /workspace/ComfyUI/models/{diffusion_models,vae,text_encoders,clip_vision,loras} /workspace/ComfyUI/custom_nodes
 }
 
+function log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
+}
+
 function provisioning_download() {
-    wget --header="Authorization: Bearer $HF_TOKEN" -qnc --content-disposition --show-progress -P "$2" "$1"
+    local url="$1"; local dest="$2"
+    mkdir -p "$dest"
+    log "Starting download: $url -> $dest"
+    # Do not use -q (quiet); write full wget output to tee so it lands in PROVISION_LOG
+    wget --header="Authorization: Bearer $HF_TOKEN" -nc --content-disposition --show-progress -P "$dest" "$url" 2>&1 | tee -a "$PROVISION_LOG"
+    local rc=${PIPESTATUS[0]:-0}
+    if [ $rc -ne 0 ]; then
+        log "ERROR: download failed: $url (exit $rc)"
+        return $rc
+    fi
+    log "Finished download: $url"
 }
 
 function clone_custom_nodes() {
@@ -45,11 +66,12 @@ function clone_custom_nodes() {
     for repo in "${CUSTOM_NODES[@]}"; do
         dir="${repo##*/}"; dir="${dir%.git}"
         if [ ! -d "$dir" ]; then
-            echo "[INFO] Cloning: $repo"
-            git clone "$repo" "$dir" --depth 1 || git clone "$repo" "$dir"
+            log "Cloning: $repo"
+            # show git output to log as well
+            git clone "$repo" "$dir" --depth 1 2>&1 | tee -a "$PROVISION_LOG" || (git clone "$repo" "$dir" 2>&1 | tee -a "$PROVISION_LOG")
         else
-            echo "[INFO] Node already exists: $dir"
-            (cd "$dir" && git pull --ff-only || true)
+            log "Node already exists: $dir — pulling updates"
+            (cd "$dir" && git pull --ff-only 2>&1 | tee -a "$PROVISION_LOG" || true)
         fi
     done
 }
@@ -102,6 +124,7 @@ function provisioning_start() {
     for url in "${CLIP_VISION_MODELS[@]}"; do provisioning_download "$url" "/workspace/ComfyUI/models/clip_vision"; done
     for url in "${LORA_MODELS[@]}"; do provisioning_download "$url" "/workspace/ComfyUI/models/loras"; done
     provisioning_print_end
+    log "Provisioning log saved to: $PROVISION_LOG"
 }
 
 provisioning_start
