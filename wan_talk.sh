@@ -1,12 +1,21 @@
 #!/bin/bash
-set -e
+
+# Этот файл должен выполняться в init.sh (CPU provisioning stage)
+# GPU запустится только после завершения всех установок
 
 if [ -z "${HF_TOKEN}" ]; then
     echo "HF_TOKEN is not set. Exiting."
     exit 1
 fi
 
-# Define model URLs
+CUSTOM_NODES=(
+    "https://github.com/kijai/ComfyUI-WanVideoWrapper"
+    "https://github.com/kijai/ComfyUI-KJNodes"
+    "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+    "https://github.com/christian-byrne/audio-separation-nodes-comfyui"
+    "https://github.com/ltdrdata/ComfyUI-Manager"
+)
+
 DIFFUSION_MODELS=(
     "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/InfiniteTalk/Wan2_1-InfiniTetalk-Single_fp16.safetensors"
     "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors"
@@ -28,45 +37,37 @@ LORA_MODELS=(
     "https://huggingface.co/lightx2v/Wan2.1-I2V-14B-480P-StepDistill-CfgDistill-Lightx2v/resolve/main/loras/Wan21_I2V_14B_lightx2v_cfg_step_distill_lora_rank64.safetensors"
 )
 
-CUSTOM_NODES=(
-    "https://github.com/kijai/ComfyUI-WanVideoWrapper"
-    "https://github.com/kijai/ComfyUI-KJNodes"
-    "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
-    "https://github.com/christian-byrne/audio-separation-nodes-comfyui"
-)
-
 PYTHON_PACKAGES=(
-    #"opencv-python==4.7.0.72"
+    # "opencv-python==4.7.0.72"
 )
 
-NODES=(
-    "https://github.com/ltdrdata/ComfyUI-Manager"
-)
+### Вспомогательные функции ###
 
-# Function to create directories
+function provisioning_print_header() {
+    printf "\n##############################################\n"
+    printf "#      Provisioning container (CPU stage)     #\n"
+    printf "##############################################\n\n"
+}
+
+function provisioning_print_end() {
+    printf "\nProvisioning complete: Web UI will start now (GPU stage)\n\n"
+}
+
 function create_directories() {
-    echo "[INFO] Creating directories..."
-    mkdir -p /workspace/ComfyUI/models/diffusion_models
-    mkdir -p /workspace/ComfyUI/models/vae
-    mkdir -p /workspace/ComfyUI/models/text_encoders
-    mkdir -p /workspace/ComfyUI/models/clip_vision
-    mkdir -p /workspace/ComfyUI/models/loras
+    mkdir -p /workspace/ComfyUI/models/{diffusion_models,vae,text_encoders,clip_vision,loras}
     mkdir -p /workspace/ComfyUI/custom_nodes
 }
 
-# Function to download models
-function download_models() {
+function provisioning_download() {
     local dir="$1"
     shift
-    local urls=("$@")
     mkdir -p "$dir"
-    for url in "${urls[@]}"; do
+    for url in "$@"; do
         echo "[INFO] Downloading: $url"
-        wget --header="Authorization: Bearer $HF_TOKEN" -nc -P "$dir" "$url"
+        wget --header="Authorization: Bearer $HF_TOKEN" -qnc --content-disposition -P "$dir" "$url"
     done
 }
 
-# Function to install custom nodes
 function install_custom_nodes() {
     cd /workspace/ComfyUI/custom_nodes
     for repo in "${CUSTOM_NODES[@]}"; do
@@ -75,9 +76,7 @@ function install_custom_nodes() {
             echo "[INFO] Cloning: $repo"
             git clone "$repo"
             if [ -f "$dir/requirements.txt" ]; then
-                cd "$dir"
-                pip install -r requirements.txt || true
-                cd ..
+                micromamba -n comfyui run pip install -r "$dir/requirements.txt" || true
             fi
         else
             echo "[INFO] Node already exists: $dir"
@@ -85,40 +84,25 @@ function install_custom_nodes() {
     done
 }
 
-# Function to install Python packages
 function install_python_packages() {
     if [ ${#PYTHON_PACKAGES[@]} -gt 0 ]; then
-        echo "[INFO] Installing Python packages..."
-        pip install "${PYTHON_PACKAGES[@]}"
+        micromamba -n comfyui run pip install "${PYTHON_PACKAGES[@]}"
     fi
 }
 
-# Function to install nodes
-function install_nodes() {
-    for repo in "${NODES[@]}"; do
-        local dir="${repo##*/}"
-        local path="/workspace/ComfyUI/custom_nodes/${dir}"
-        if [ ! -d "$path" ]; then
-            echo "[INFO] Cloning node: $repo"
-            git clone "$repo" "$path"
-        else
-            echo "[INFO] Node already exists: $dir"
-        fi
-    done
-}
+### Основной запуск ###
 
-# Main provisioning function
 function provisioning_start() {
+    provisioning_print_header
     create_directories
     install_python_packages
-    install_nodes
-    download_models "/workspace/ComfyUI/models/diffusion_models" "${DIFFUSION_MODELS[@]}"
-    download_models "/workspace/ComfyUI/models/vae" "${VAE_MODELS[@]}"
-    download_models "/workspace/ComfyUI/models/text_encoders" "${TEXT_ENCODERS[@]}"
-    download_models "/workspace/ComfyUI/models/clip_vision" "${CLIP_VISION_MODELS[@]}"
-    download_models "/workspace/ComfyUI/models/loras" "${LORA_MODELS[@]}"
     install_custom_nodes
-    echo "[INFO] Custom provisioning complete!"
+    provisioning_download "/workspace/ComfyUI/models/diffusion_models" "${DIFFUSION_MODELS[@]}"
+    provisioning_download "/workspace/ComfyUI/models/vae" "${VAE_MODELS[@]}"
+    provisioning_download "/workspace/ComfyUI/models/text_encoders" "${TEXT_ENCODERS[@]}"
+    provisioning_download "/workspace/ComfyUI/models/clip_vision" "${CLIP_VISION_MODELS[@]}"
+    provisioning_download "/workspace/ComfyUI/models/loras" "${LORA_MODELS[@]}"
+    provisioning_print_end
 }
 
 provisioning_start
