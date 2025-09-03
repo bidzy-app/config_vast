@@ -90,7 +90,7 @@ function install_python_packages() {
     fi
 }
 
-### Основной запуск ###
+## Основной запуск ##
 
 function provisioning_start() {
     provisioning_print_header
