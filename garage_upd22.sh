@@ -9,9 +9,8 @@ mkdir -p "$COMFY_ROOT"
 exec > >(tee -a "$PROVISION_LOG") 2>&1
 
 # Принимаем несколько имен переменных для токена
-HF_TOKEN="\${HF_TOKEN:-\${HUGGING_FACE_HUB_TOKEN:-\${HUGGINGFACEHUB_API_TOKEN:-}}}"
-
-if [ -z "\${HF_TOKEN}" ]; then
+HF_TOKEN="${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-${HUGGINGFACEHUB_API_TOKEN:-}}}"
+if [ -z "${HF_TOKEN}" ]; then
   echo "HF_TOKEN is not set. Exiting."
   exit 1
 fi
@@ -120,16 +119,10 @@ verify_installations() {
   local PY="/opt/micromamba/envs/comfyui/bin/python"
   "$PY" - << 'PYEOF'
 import numpy, diffusers, librosa, git, cv2, av, moviepy, toml
-v = numpy.version
+v = numpy.__version__
 assert v.startswith('1.'), f'Incorrect NumPy version: {v}'
-print('✅ NumPy version OK:', v)
-print('✅ diffusers OK')
-print('✅ librosa OK')
-print('✅ GitPython OK')
-print('✅ OpenCV (cv2) OK')
-print('✅ PyAV OK')
-print('✅ moviepy OK')
-print('✅ toml OK')
+print('OK NumPy:', v)
+print('OK diffusers, librosa, GitPython, cv2, av, moviepy, toml')
 PYEOF
   echo "[INFO] All package verifications passed!"
 }
@@ -140,7 +133,7 @@ provisioning_start() {
   clone_custom_nodes
   install_python_packages
   verify_installations
-  for url in "\${DIFFUSION_MODELS[@]}"; do provisioning_download "\$url" "$COMFY_ROOT/models/checkpoints"; done
+  for url in "${DIFFUSION_MODELS[@]}"; do provisioning_download "\$url" "$COMFY_ROOT/models/checkpoints"; done
   for url in "${VAE_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/vae"; done
   for url in "${TEXT_ENCODERS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/text_encoders"; done
   for url in "${CLIP_VISION_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/clip_vision"; done

@@ -16,7 +16,7 @@ mkdir -p "$WORKSPACE_DIR"
 cd "$WORKSPACE_DIR"
 
 # проброс внешнего TCP-порта
-export VAST_TCP_PORT_${WORKER_PORT}=${INTERNAL_PORT}
+export VAST_TCP_PORT_${INTERNAL_PORT}=${WORKER_PORT}
 export UNSECURED=false
 
 exec &> >(tee -a "$DEBUG_LOG")
