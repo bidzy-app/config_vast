@@ -8,7 +8,10 @@ PROVISION_LOG="$COMFY_ROOT/provisioning.log"
 mkdir -p "$COMFY_ROOT"
 exec > >(tee -a "$PROVISION_LOG") 2>&1
 
-if [ -z "${HF_TOKEN}" ]; then
+# Принимаем несколько имен переменных для токена
+HF_TOKEN="\${HF_TOKEN:-\${HUGGING_FACE_HUB_TOKEN:-\${HUGGINGFACEHUB_API_TOKEN:-}}}"
+
+if [ -z "\${HF_TOKEN}" ]; then
   echo "HF_TOKEN is not set. Exiting."
   exit 1
 fi
@@ -56,7 +59,7 @@ provisioning_print_end() {
 
 create_directories() {
   mkdir -p \
-    "$COMFY_ROOT/models/diffusion_models" \
+    "$COMFY_ROOT/models/checkpoints" \
     "$COMFY_ROOT/models/vae" \
     "$COMFY_ROOT/models/text_encoders" \
     "$COMFY_ROOT/models/clip_vision" \
@@ -137,7 +140,7 @@ provisioning_start() {
   clone_custom_nodes
   install_python_packages
   verify_installations
-  for url in "${DIFFUSION_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/diffusion_models"; done
+  for url in "\${DIFFUSION_MODELS[@]}"; do provisioning_download "\$url" "$COMFY_ROOT/models/checkpoints"; done
   for url in "${VAE_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/vae"; done
   for url in "${TEXT_ENCODERS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/text_encoders"; done
   for url in "${CLIP_VISION_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/clip_vision"; done
