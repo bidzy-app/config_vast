@@ -10,11 +10,11 @@ if [ -z "${HF_TOKEN}" ]; then
 fi
 
 CUSTOM_NODES=(
-    "https://github.com/kijai/ComfyUI-WanVideoWrapper"
+    # "https://github.com/kijai/ComfyUI-WanVideoWrapper"
     # "https://github.com/kijai/ComfyUI-KJNodes" # Temporarily removed due to incompatibility
     "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
     "https://github.com/christian-byrne/audio-separation-nodes-comfyui"
-    "https://github.com/ltdrdata/ComfyUI-Manager"
+    # "https://github.com/ltdrdata/ComfyUI-Manager"
 )
 
 DIFFUSION_MODELS=(
