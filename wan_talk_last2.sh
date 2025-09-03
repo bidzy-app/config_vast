@@ -64,14 +64,10 @@ function create_directories() {
     mkdir -p /workspace/ComfyUI/custom_nodes
 }
 
+# Download from $1 URL to $2 directory (matches working example)
 function provisioning_download() {
-    local dir="$1"
-    shift
-    mkdir -p "$dir"
-    for url in "$@"; do
-        echo "[INFO] Downloading: $url"
-        wget --header="Authorization: Bearer $HF_TOKEN" -qnc --content-disposition -P "$dir" "$url"
-    done
+    # $1 = url, $2 = dest dir
+    wget --header="Authorization: Bearer $HF_TOKEN" -qnc --content-disposition --show-progress -P "$2" "$1"
 }
 
 # Ensure VAST_TCP_PORT_3000 exists to avoid pyworker KeyError
@@ -82,7 +78,15 @@ function ensure_worker_port_env() {
             varname="VAST_TCP_PORT_${candidate}"
             if [ ! -z "${!varname}" ]; then
                 echo "[INFO] Setting VAST_TCP_PORT_3000=${!varname} (from ${varname})"
-                echo "VAST_TCP_PORT_3000=${!varname}" >> /etc/environment || true
+                # try to persist to /etc/environment only if writable
+                if [ -w /etc/environment ] 2>/dev/null || touch /etc/environment 2>/dev/null; then
+                    echo "VAST_TCP_PORT_3000=${!varname}" >> /etc/environment || true
+                else
+                    # fallback: persist in workspace so other processes can source it
+                    mkdir -p /workspace
+                    echo "VAST_TCP_PORT_3000=${!varname}" > /workspace/VAST_TCP_PORT_3000.env || true
+                    echo "[WARN] Cannot write /etc/environment, wrote to /workspace/VAST_TCP_PORT_3000.env instead"
+                fi
                 export VAST_TCP_PORT_3000="${!varname}"
                 return 0
             fi
@@ -101,15 +105,21 @@ function safe_micromamba_install() {
         max=6
         wait_s=5
         while [ $tries -lt $max ]; do
-            if micromamba -n comfyui run ${PIP_INSTALL} "${pkgs[@]}"; then
+            # capture output to detect lock errors
+            if micromamba -n comfyui run ${PIP_INSTALL} "${pkgs[@]}" 2>&1 | tee /tmp/micromamba_install.log; then
                 return 0
+            fi
+            # If lock-related error detected, break and fallback to pip
+            if grep -qiE "lock|Could not open lockfile|LockFile acquisition failed" /tmp/micromamba_install.log 2>/dev/null; then
+                echo "[WARN] micromamba lock error detected, skipping micromamba and using pip fallback"
+                break
             fi
             echo "[WARN] micromamba install failed, retrying in ${wait_s}s (try $((tries+1))/$max)..."
             sleep $wait_s
             tries=$((tries+1))
             wait_s=$((wait_s*2))
         done
-        echo "[WARN] micromamba failed after retries, falling back to pip..."
+        echo "[WARN] micromamba failed after retries or lock detected, falling back to pip..."
     fi
 
     if command -v pip >/dev/null 2>&1; then
@@ -156,10 +166,15 @@ function install_node_requirements() {
     done
 }
 
+# Install python packages (use micromamba like in working example, fallback to pip)
 function install_python_packages() {
     if [ ${#PYTHON_PACKAGES[@]} -gt 0 ]; then
         echo "[INFO] Installing additional Python packages..."
-        safe_micromamba_install "${PYTHON_PACKAGES[@]}"
+        if command -v micromamba >/dev/null 2>&1; then
+            micromamba -n comfyui run ${PIP_INSTALL} ${PYTHON_PACKAGES[*]} || true
+        else
+            pip install --no-cache-dir "${PYTHON_PACKAGES[@]}" || true
+        fi
     fi
 }
 
@@ -168,6 +183,13 @@ function install_python_packages() {
 function provisioning_start() {
     provisioning_print_header
     create_directories
+
+    # if previous run saved the port file in workspace, source it so env is available
+    if [ -f /workspace/VAST_TCP_PORT_3000.env ]; then
+        echo "[INFO] Sourcing /workspace/VAST_TCP_PORT_3000.env"
+        # shellcheck disable=SC1090
+        source /workspace/VAST_TCP_PORT_3000.env || true
+    fi
 
     ensure_worker_port_env
 
@@ -180,12 +202,22 @@ function provisioning_start() {
     # then install per-node requirements (they may depend on base packages)
     install_node_requirements
 
-    # download models
-    provisioning_download "/workspace/ComfyUI/models/diffusion_models" "${DIFFUSION_MODELS[@]}"
-    provisioning_download "/workspace/ComfyUI/models/vae" "${VAE_MODELS[@]}"
-    provisioning_download "/workspace/ComfyUI/models/text_encoders" "${TEXT_ENCODERS[@]}"
-    provisioning_download "/workspace/ComfyUI/models/clip_vision" "${CLIP_VISION_MODELS[@]}"
-    provisioning_download "/workspace/ComfyUI/models/loras" "${LORA_MODELS[@]}"
+    # download models (call provisioning_download per-url like in working example)
+    for url in "${DIFFUSION_MODELS[@]}"; do
+        provisioning_download "$url" "/workspace/ComfyUI/models/diffusion_models"
+    done
+    for url in "${VAE_MODELS[@]}"; do
+        provisioning_download "$url" "/workspace/ComfyUI/models/vae"
+    done
+    for url in "${TEXT_ENCODERS[@]}"; do
+        provisioning_download "$url" "/workspace/ComfyUI/models/text_encoders"
+    done
+    for url in "${CLIP_VISION_MODELS[@]}"; do
+        provisioning_download "$url" "/workspace/ComfyUI/models/clip_vision"
+    done
+    for url in "${LORA_MODELS[@]}"; do
+        provisioning_download "$url" "/workspace/ComfyUI/models/loras"
+    done
 
     provisioning_print_end
 }
