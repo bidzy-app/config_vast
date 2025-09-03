@@ -8,24 +8,20 @@ PROVISION_LOG="$COMFY_ROOT/provisioning.log"
 mkdir -p "$COMFY_ROOT"
 exec > >(tee -a "$PROVISION_LOG") 2>&1
 
-# Принимаем несколько имен переменных для токена
 HF_TOKEN="${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-${HUGGINGFACEHUB_API_TOKEN:-}}}"
 if [ -z "${HF_TOKEN}" ]; then
-echo "HF_TOKEN is not set. Continuing without authentication (public files only)."
+    echo "HF_TOKEN is not set. Continuing without authentication (public files only)."
 else
-echo "HF_TOKEN detected; will be used if anonymous download fails."
+    echo "HF_TOKEN detected; will be used if anonymous download fails."
 fi
 
-# Кастомные ноды (пример)
 CUSTOM_NODES=(
   "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
   "https://github.com/christian-byrne/audio-separation-nodes-comfyui"
   "https://github.com/kijai/ComfyUI-WanVideoWrapper"
   "https://github.com/kijai/ComfyUI-KJNodes.git"
-
 )
 
-# Модели
 DIFFUSION_MODELS=(
   "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/InfiniteTalk/Wan2_1-InfiniTetalk-Single_fp16.safetensors"
   "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors"
@@ -76,13 +72,11 @@ provisioning_download() {
     mkdir -p "$dest"
     log "Starting download: $url -> $dest"
 
-    # Сначала пробуем анонимно
     if wget -nc --content-disposition --show-progress -P "$dest" "$url"; then
         log "Finished download (anon): $url"
         return 0
     fi
 
-    # Если есть токен — пробуем с ним
     if [ -n "$HF_TOKEN" ]; then
         log "Retrying with token: $url"
         wget --header="Authorization: Bearer $HF_TOKEN" \
@@ -100,7 +94,6 @@ provisioning_download() {
     return 1
 }
 
-
 clone_custom_nodes() {
   mkdir -p "$COMFY_ROOT/custom_nodes"
   cd "$COMFY_ROOT/custom_nodes"
@@ -115,7 +108,6 @@ clone_custom_nodes() {
       (cd "$dir" && git pull --ff-only 2>&1 | tee -a "$PROVISION_LOG" || true)
     fi
 
-    # Проверка и установка requirements.txt, если он есть
     if [ -f "$dir/requirements.txt" ]; then
       log "Installing Python packages from $dir/requirements.txt"
       /opt/micromamba/envs/comfyui/bin/pip install --upgrade -r "$dir/requirements.txt"
@@ -129,26 +121,41 @@ install_python_packages() {
   "$PIP" install --upgrade --no-cache-dir \
     "numpy<2,>=1.26.4" \
     "opencv-python-headless==4.7.0.72" \
-    diffusers \
-    librosa \
+    diffusers>=0.33.0 \
+    librosa==0.10.2 \
+    torchaudio>=2.3.0 \
     GitPython \
     "imageio[ffmpeg]" \
     imageio-ffmpeg \
     soundfile \
     av \
     "moviepy<2" \
-    toml
+    toml \
+    pillow>=10.3.0 \
+    scipy \
+    color-matcher \
+    matplotlib \
+    huggingface_hub \
+    mss \
+    ftfy \
+    accelerate>=1.2.1 \
+    einops \
+    peft>=0.17.0 \
+    sentencepiece>=0.2.0 \
+    protobuf \
+    pyloudnorm \
+    gguf>=0.14.0
 }
 
 verify_installations() {
   echo "[INFO] Verifying installations..."
   local PY="/opt/micromamba/envs/comfyui/bin/python"
   "$PY" - << 'PYEOF'
-import numpy, diffusers, librosa, git, cv2, av, moviepy, toml
+import numpy, diffusers, librosa, torchaudio, git, cv2, av, moviepy, toml, pillow, scipy, matplotlib, huggingface_hub
 v = numpy.__version__
 assert v.startswith('1.'), f'Incorrect NumPy version: {v}'
 print('OK NumPy:', v)
-print('OK diffusers, librosa, GitPython, cv2, av, moviepy, toml')
+print('OK diffusers, librosa, torchaudio, GitPython, cv2, av, moviepy, toml, pillow, scipy, matplotlib, huggingface_hub')
 PYEOF
   echo "[INFO] All package verifications passed!"
 }
@@ -159,12 +166,13 @@ provisioning_start() {
   clone_custom_nodes
   install_python_packages
   verify_installations
-  # CORRECTED LINE BELOW
+
   for url in "${DIFFUSION_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/checkpoints"; done
   for url in "${VAE_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/vae"; done
   for url in "${TEXT_ENCODERS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/text_encoders"; done
   for url in "${CLIP_VISION_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/clip_vision"; done
   for url in "${LORA_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/loras"; done
+
   provisioning_print_end
   log "Provisioning log saved to: $PROVISION_LOG"
 }
