@@ -98,16 +98,30 @@ function install_python_packages() {
         GitPython \
         imageio[ffmpeg] \
         imageio-ffmpeg \
-        soundfile
+        soundfile \
+        av \
+        "moviepy<2" \
+        toml
 }
 
 function verify_installations() {
     echo "[INFO] Verifying installations..."
-    micromamba -n comfyui run python -c "import numpy; v = numpy.__version__; assert v.startswith('1.'), f'Incorrect NumPy version: {v}'; print(f'✅ NumPy version OK: {v}')"
-    micromamba -n comfyui run python -c "import diffusers; print('✅ diffusers OK')"
-    micromamba -n comfyui run python -c "import librosa; print('✅ librosa OK')"
-    micromamba -n comfyui run python -c "import git; print('✅ GitPython OK')"
-    micromamba -n comfyui run python -c "import cv2; print('✅ OpenCV (cv2) OK')"
+    local PY="/opt/micromamba/envs/comfyui/bin/python"
+
+    "$PY" - << 'PYEOF'
+import numpy, diffusers, librosa, git, cv2, av, moviepy, toml
+v = numpy.__version__
+assert v.startswith('1.'), f'Incorrect NumPy version: {v}'
+print('✅ NumPy version OK:', v)
+print('✅ diffusers OK')
+print('✅ librosa OK')
+print('✅ GitPython OK')
+print('✅ OpenCV (cv2) OK')
+print('✅ PyAV OK')
+print('✅ moviepy OK')
+print('✅ toml OK')
+PYEOF
+
     echo "[INFO] All package verifications passed!"
 }
 
