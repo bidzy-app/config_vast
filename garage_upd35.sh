@@ -8,10 +8,13 @@ PROVISION_LOG="$COMFY_ROOT/provisioning.log"
 # --- NEW: Function to update the main ComfyUI repository ---
 update_comfyui() {
     if [ -d "$COMFY_ROOT/.git" ]; then
-        log "Attempting to update ComfyUI..."
-        (cd "$COMFY_ROOT" && git pull --ff-only) || log "Could not update ComfyUI. Continuing with existing version."
+        log "Updating existing ComfyUI repo..."
+        (cd "$COMFY_ROOT" && git fetch --all && git pull --ff-only && git submodule update --init --recursive) \
+          || log "Could not update ComfyUI. Continuing with existing version."
     else
-        log "ComfyUI is not a git repository, skipping update."
+        log "ComfyUI not found, cloning fresh..."
+        git clone https://github.com/comfyanonymous/ComfyUI.git "$COMFY_ROOT" --depth 1
+        (cd "$COMFY_ROOT" && git submodule update --init --recursive)
     fi
 }
 
@@ -169,9 +172,8 @@ sys.exit(1) # Failure: package needs to be installed or updated
 
 provisioning_start() {
   provisioning_print_header
-  # --- NEW: Update ComfyUI before installing dependencies ---
-  update_comfyui
   create_directories
+  update_comfyui
   clone_custom_nodes
   install_python_packages
   for url in "${DIFFUSION_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/checkpoints"; done
