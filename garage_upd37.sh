@@ -9,12 +9,32 @@ PROVISION_LOG="$COMFY_ROOT/provisioning.log"
 update_comfyui() {
     if [ -d "$COMFY_ROOT/.git" ]; then
         log "Updating existing ComfyUI repo..."
-        (cd "$COMFY_ROOT" && git fetch --all && git pull --ff-only && git submodule update --init --recursive) \
-          || log "Could not update ComfyUI. Continuing with existing version."
+        (
+            cd "$COMFY_ROOT"
+            git fetch --all
+            git reset --hard origin/master
+            git submodule update --init --recursive
+        ) || log "Could not update ComfyUI. Continuing with existing version."
     else
-        log "ComfyUI not found, cloning fresh..."
+        log "ComfyUI is not a git repo. Removing and cloning fresh..."
+        rm -rf "$COMFY_ROOT"
         git clone https://github.com/comfyanonymous/ComfyUI.git "$COMFY_ROOT" --depth 1
         (cd "$COMFY_ROOT" && git submodule update --init --recursive)
+    fi
+}
+
+log_comfy_version() {
+    if [ -d "$COMFY_ROOT/.git" ]; then
+        local version commit_date
+        version=$(cd "$COMFY_ROOT" && git rev-parse --short HEAD)
+        commit_date=$(cd "$COMFY_ROOT" && git log -1 --format=%cd --date=short)
+        log "ComfyUI version: $version (date: $commit_date)"
+    elif [ -f "$COMFY_ROOT/commit_hash.txt" ]; then
+        local version
+        version=$(cat "$COMFY_ROOT/commit_hash.txt")
+        log "ComfyUI version (from commit_hash.txt): $version"
+    else
+        log "ComfyUI version: unknown (no git repo or commit_hash.txt)"
     fi
 }
 
@@ -186,6 +206,7 @@ sys.exit(1) # Failure: package needs to be installed or updated
 provisioning_start() {
   provisioning_print_header
   update_comfyui
+  log_comfy_version
   install_comfyui_requirements
   create_directories
   clone_custom_nodes
