@@ -36,7 +36,7 @@ LORA_MODELS=("https://huggingface.co/lightx2v/Wan2.1-I2V-14B-480P-StepDistill-Cf
 log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
 
 provisioning_print_header() {
-  printf "\n##############################################\n#      Provisioning container (CPU stage)     #\n##############################################\n\n"
+  printf "\n##############################################\n#      Provisioning container (CPU stage)      #\n##############################################\n\n"
 }
 
 provisioning_print_end() {
@@ -84,13 +84,61 @@ clone_custom_nodes() {
   done
 }
 
+# --- НОВАЯ УМНАЯ ФУНКЦИЯ УСТАНОВКИ МОДУЛЕЙ ---
 install_python_packages() {
-  local PIP="/opt/micromamba/envs/comfyui/bin/pip"
-  echo "[INFO] Installing missing or updated Python packages (pip)..."
+    local PIP="/opt/micromamba/envs/comfyui/bin/pip"
+    # Находим путь к Python в той же среде, что и pip
+    local PYTHON_CMD
+    PYTHON_CMD="$(dirname "$PIP")/python"
 
-  "$PIP" install --upgrade --no-cache-dir \
-    color-matcher \
-    imageio-ffmpeg
+    log "Проверка необходимых Python-модулей..."
+
+    # Список всех необходимых модулей с версиями
+    local requirements=(
+        "librosa==0.10.2"
+        "torchaudio>=2.3.0"
+        "numpy"
+        "moviepy"
+        "pillow>=10.3.0"
+        "scipy"
+        "color-matcher"
+        "matplotlib"
+        "huggingface_hub"
+        "mss"
+        "opencv-python"
+        "ftfy"
+        "accelerate>=1.2.1"
+        "einops"
+        "diffusers>=0.33.0"
+        "peft>=0.17.0"
+        "sentencepiece>=0.2.0"
+        "protobuf"
+        "pyloudnorm"
+        "gguf>=0.14.0"
+        "imageio-ffmpeg"
+    )
+
+    # Массив для модулей, которые нужно установить или обновить
+    local packages_to_install=()
+    for req in "${requirements[@]}"; do
+        # Используем встроенные средства Python для проверки версий.
+        # Это самый надежный способ, который корректно обрабатывает '>=', '==' и т.д.
+        # Команда вернет 0 (успех), если требование удовлетворено.
+        if ! "$PYTHON_CMD" -c "from pkg_resources import require; require('$req')" &>/dev/null; then
+            log "-> Требуется установка/обновление: '$req'."
+            packages_to_install+=("$req")
+        else
+            log "-> Модуль уже установлен: '$req'."
+        fi
+    done
+
+    # Если есть что устанавливать, запускаем pip только для этих модулей
+    if [ ${#packages_to_install[@]} -gt 0 ]; then
+        log "Установка/обновление ${#packages_to_install[@]} модулей..."
+        "$PIP" install --upgrade --no-cache-dir "${packages_to_install[@]}"
+    else
+        log "Все Python-модули уже установлены и соответствуют требованиям. ✨"
+    fi
 }
 
 provisioning_start() {
