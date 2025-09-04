@@ -82,6 +82,19 @@ provisioning_download() {
   fi
 }
 
+install_comfyui_requirements() {
+    local PYTHON_BIN
+    if [ -x "$COMFY_ROOT/python_embeded/python.exe" ]; then
+        PYTHON_BIN="$COMFY_ROOT/python_embeded/python.exe"
+    else
+        PYTHON_BIN="/opt/micromamba/envs/comfyui/bin/python"
+    fi
+
+    log "Installing ComfyUI requirements with $PYTHON_BIN..."
+    "$PYTHON_BIN" -s -m pip install --upgrade pip setuptools wheel
+    "$PYTHON_BIN" -s -m pip install -r "$COMFY_ROOT/requirements.txt"
+}
+
 clone_custom_nodes() {
   mkdir -p "$COMFY_ROOT/custom_nodes"
   cd "$COMFY_ROOT/custom_nodes"
@@ -172,8 +185,9 @@ sys.exit(1) # Failure: package needs to be installed or updated
 
 provisioning_start() {
   provisioning_print_header
-  create_directories
   update_comfyui
+  install_comfyui_requirements
+  create_directories
   clone_custom_nodes
   install_python_packages
   for url in "${DIFFUSION_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/checkpoints"; done
