@@ -128,6 +128,8 @@ install_python_packages() {
         "pyloudnorm"
         "gguf>=0.14.0"
         "imageio-ffmpeg"
+        "av"
+        "comfy-cli"
     )
 
     local packages_to_install=()
