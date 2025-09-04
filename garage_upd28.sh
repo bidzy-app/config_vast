@@ -93,7 +93,7 @@ install_python_packages() {
     asttokens==3.0.0 attrs==25.3.0 audioread==3.0.1 av==15.0.0 beautifulsoup4==4.13.4 certifi==2025.6.15 \
     cffi==1.17.1 chardet==5.2.0 charset-normalizer==3.4.2 click==8.2.1 color-matcher==0.6.0 \
     colour-science==0.4.6 comfyui-embedded-docs==0.2.4 comfyui_frontend_package==1.23.4 \
-    comfyui_workflow_templates==0.1.41 comm==0.2.2 contourpy==1.3.3 cryptography==45.0.5 cycler==0.12.1 \
+    comfyui_workflow_templates==0.1.41 comm==0.2.2 contourpy==1.2.1 cryptography==45.0.5 cycler==0.12.1 \
     ddt==1.7.2 debugpy==1.8.14 decorator==5.2.1 diffusers==0.35.1 docutils==0.22 easydict==1.13 \
     einops==0.8.1 executing==2.2.0 filelock==3.18.0 fonttools==4.59.2 frozenlist==1.7.0 fsspec==2025.5.1 \
     ftfy==6.3.1 future==1.0.0 gdown==5.2.0 gguf==0.17.1 gitdb==4.0.12 GitPython==3.1.45 greenlet==3.2.3 \
