@@ -5,6 +5,16 @@ set -e
 COMFY_ROOT="${COMFY_ROOT:-/opt/ComfyUI}"
 PROVISION_LOG="$COMFY_ROOT/provisioning.log"
 
+# --- NEW: Function to update the main ComfyUI repository ---
+update_comfyui() {
+    if [ -d "$COMFY_ROOT/.git" ]; then
+        log "Attempting to update ComfyUI..."
+        (cd "$COMFY_ROOT" && git pull --ff-only) || log "Could not update ComfyUI. Continuing with existing version."
+    else
+        log "ComfyUI is not a git repository, skipping update."
+    fi
+}
+
 mkdir -p "$COMFY_ROOT"
 exec > >(tee -a "$PROVISION_LOG") 2>&1
 
@@ -25,12 +35,12 @@ CUSTOM_NODES=(
 
 # Модели
 DIFFUSION_MODELS=(
-  "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/InfiniteTalk/Wan2_1-InfiniTetalk-Single_fp16.safetensors"
-  "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors"
+  "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/InfiniteTalk/Wan2_1-InfiniTetalk-Single_fp16.safensors"
+  "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1-I2V-14B-480P_fp8_e4m3fn.safensors"
 )
-VAE_MODELS=("https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1_VAE_bf16.safetensors")
-TEXT_ENCODERS=("https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/umt5-xxl-enc-fp8_e4m3fn.safetensors")
-CLIP_VISION_MODELS=("https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors")
+VAE_MODELS=("https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1_VAE_bf16.safensors")
+TEXT_ENCODERS=("https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/umt5-xxl-enc-fp8_e4m3fn.safensors")
+CLIP_VISION_MODELS=("https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safensors")
 LORA_MODELS=("https://huggingface.co/lightx2v/Wan2.1-I2V-14B-480P-StepDistill-CfgDistill-Lightx2v/resolve/main/loras/Wan21_I2V_14B_lightx2v_cfg_step_distill_lora_rank64.safetensors")
 
 log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
@@ -84,20 +94,22 @@ clone_custom_nodes() {
   done
 }
 
-# --- НОВАЯ УМНАЯ ФУНКЦИЯ УСТАНОВКИ МОДУЛЕЙ ---
+# --- ОБНОВЛЁННАЯ И МОДЕРНИЗИРОВАННАЯ ФУНКЦИЯ УСТАНОВКИ МОДУЛЕЙ ---
 install_python_packages() {
     local PIP="/opt/micromamba/envs/comfyui/bin/pip"
-    # Находим путь к Python в той же среде, что и pip
     local PYTHON_CMD
     PYTHON_CMD="$(dirname "$PIP")/python"
 
     log "Проверка необходимых Python-модулей..."
 
     # Список всех необходимых модулей с версиями
+    # packaging добавлен для быстрой и современной проверки версий
+    # numpy закреплен для избежания проблем с NumPy 2.0
     local requirements=(
+        "packaging"
         "librosa==0.10.2"
         "torchaudio>=2.3.0"
-        "numpy"
+        "numpy==1.26.4"
         "moviepy"
         "pillow>=10.3.0"
         "scipy"
@@ -118,13 +130,26 @@ install_python_packages() {
         "imageio-ffmpeg"
     )
 
-    # Массив для модулей, которые нужно установить или обновить
     local packages_to_install=()
     for req in "${requirements[@]}"; do
-        # Используем встроенные средства Python для проверки версий.
-        # Это самый надежный способ, который корректно обрабатывает '>=', '==' и т.д.
-        # Команда вернет 0 (успех), если требование удовлетворено.
-        if ! "$PYTHON_CMD" -c "from pkg_resources import require; require('$req')" &>/dev/null; then
+        # --- NEW: Modern, fast, and reliable package version check ---
+        # This uses Python's modern 'packaging' and 'importlib.metadata' libraries,
+        # which are much faster and more reliable than the legacy 'pkg_resources'.
+        if ! "$PYTHON_CMD" -c "
+import sys
+from importlib.metadata import version, PackageNotFoundError
+from packaging.requirements import Requirement
+try:
+    req = Requirement(sys.argv[1])
+    installed_version = version(req.name)
+    if req.specifier.contains(installed_version):
+        sys.exit(0) # Success: package is installed and version is correct
+except PackageNotFoundError:
+    pass # Package not found, needs installation
+except Exception:
+    pass # Any other error, assume it needs installation
+sys.exit(1) # Failure: package needs to be installed or updated
+" "$req"; then
             log "-> Требуется установка/обновление: '$req'."
             packages_to_install+=("$req")
         else
@@ -132,7 +157,6 @@ install_python_packages() {
         fi
     done
 
-    # Если есть что устанавливать, запускаем pip только для этих модулей
     if [ ${#packages_to_install[@]} -gt 0 ]; then
         log "Установка/обновление ${#packages_to_install[@]} модулей..."
         "$PIP" install --upgrade --no-cache-dir "${packages_to_install[@]}"
@@ -143,6 +167,8 @@ install_python_packages() {
 
 provisioning_start() {
   provisioning_print_header
+  # --- NEW: Update ComfyUI before installing dependencies ---
+  update_comfyui
   create_directories
   clone_custom_nodes
   install_python_packages
