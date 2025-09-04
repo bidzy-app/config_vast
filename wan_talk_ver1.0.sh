@@ -79,6 +79,7 @@ provisioning_print_end() {
 create_directories() {
   mkdir -p \
     "$COMFY_ROOT/models/checkpoints" \
+    "$COMFY_ROOT/models/diffusion_models" \
     "$COMFY_ROOT/models/vae" \
     "$COMFY_ROOT/models/text_encoders" \
     "$COMFY_ROOT/models/clip_vision" \
@@ -211,7 +212,7 @@ provisioning_start() {
   create_directories
   clone_custom_nodes
   install_python_packages
-  for url in "${DIFFUSION_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/checkpoints"; done
+  for url in "${DIFFUSION_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/diffusion_models"; done
   for url in "${VAE_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/vae"; done
   for url in "${TEXT_ENCODERS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/text_encoders"; done
   for url in "${CLIP_VISION_MODELS[@]}"; do provisioning_download "$url" "$COMFY_ROOT/models/clip_vision"; done
