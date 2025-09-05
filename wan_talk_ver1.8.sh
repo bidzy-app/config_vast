@@ -56,16 +56,6 @@ CUSTOM_NODES=(
   "https://github.com/kijai/ComfyUI-KJNodes.git"
 )
 
-# Модели
-DIFFUSION_MODELS=(
-  "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/InfiniteTalk/Wan2_1-InfiniTetalk-Single_fp16.safetensors"
-  "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors"
-)
-VAE_MODELS=("https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1_VAE_bf16.safetensors")
-TEXT_ENCODERS=("https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/umt5-xxl-enc-fp8_e4m3fn.safetensors")
-CLIP_VISION_MODELS=("https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors")
-LORA_MODELS=("https://huggingface.co/lightx2v/Wan2.1-I2V-14B-480P-StepDistill-CfgDistill-Lightx2v/resolve/main/loras/Wan21_I2V_14B_lightx2v_cfg_step_distill_lora_rank64.safetensors")
-
 log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
 
 provisioning_print_header() {
@@ -139,11 +129,11 @@ install_python_packages() {
 
     log "Проверка необходимых Python-модулей..."
 
-    # --- CUDA-специфичные пакеты для PyTorch 2.4 + CUDA 12.1 ---
+    # --- PyTorch nightly + CUDA 12.1 для RTX 5090 ---
     local torch_packages=(
-        "torch==2.4.0+cu121"
-        "torchvision==0.19.0+cu121"
-        "torchaudio==2.4.0+cu121"
+        "torch --pre"
+        "torchvision --pre"
+        "torchaudio --pre"
     )
 
     local to_install_torch=()
@@ -151,32 +141,35 @@ install_python_packages() {
         if ! "$PYTHON_CMD" -c "
 import sys
 from importlib.metadata import version, PackageNotFoundError
-from packaging.requirements import Requirement
 try:
-    req = Requirement(sys.argv[1])
-    installed_version = version(req.name)
-    if req.specifier.contains(installed_version):
-        sys.exit(0)
-except PackageNotFoundError:
-    pass
-sys.exit(1)
-" "$pkg"; then
+    import torch
+    sys.exit(0)
+except ImportError:
+    sys.exit(1)
+"; then
             log "-> Требуется установка/обновление: '$pkg'."
             to_install_torch+=("$pkg")
         else
-            log "-> Модуль уже установлен: '$pkg'."
+            log "-> PyTorch уже установлен."
         fi
     done
 
     if [ ${#to_install_torch[@]} -gt 0 ]; then
-        log "Установка/обновление ${#to_install_torch[@]} CUDA-зависимых пакетов..."
+        log "Установка/обновление PyTorch nightly + CUDA 12.1..."
         "$PIP" install --upgrade --no-cache-dir "${to_install_torch[@]}" \
-            --index-url https://download.pytorch.org/whl/cu121
+            --index-url https://download.pytorch.org/whl/nightly/cu121
+    fi
+
+    # --- xFormers из исходников ---
+    if ! "$PYTHON_CMD" -c "import xformers" &>/dev/null; then
+        log "-> Установка xFormers из исходников под текущий PyTorch..."
+        "$PIP" install --upgrade --no-cache-dir git+https://github.com/facebookresearch/xformers.git
+    else
+        log "-> xFormers уже установлен."
     fi
 
     # --- Остальные пакеты ---
     local other_packages=(
-        "xformers"
         "accelerate>=1.2.1"
         "numpy==1.26.4"
         "librosa==0.10.2"
@@ -225,7 +218,7 @@ sys.exit(1)
     done
 
     if [ ${#to_install_other[@]} -gt 0 ]; then
-        log "Установка/обновление ${#to_install_other[@]} остальных пакетов..."
+        log "Установка/обновление остальных пакетов..."
         "$PIP" install --upgrade --no-cache-dir "${to_install_other[@]}"
     else
         log "Все Python-модули уже установлены и соответствуют требованиям. ✨"
