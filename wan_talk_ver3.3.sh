@@ -154,6 +154,8 @@ install_python_packages() {
         "imageio-ffmpeg"
         "av"
         "comfy-cli"
+        "xformers"
+        "sageattention"
     )
 
     # Модули, которые всегда нужно переустанавливать
