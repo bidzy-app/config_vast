@@ -129,23 +129,25 @@ install_python_packages() {
 
     log "Проверка необходимых Python-модулей..."
 
-    # Получаем версию CUDA
-    local cuda_version
-    if command -v nvcc &>/dev/null; then
-        cuda_version=$(nvcc --version | grep -oP 'release \K[0-9]+\.[0-9]+')
-    else
-        log "Ошибка: nvcc не найден. Не удалось определить версию CUDA."
-        exit 1
+    # --- Определение версии CUDA на сервере ---
+    local CUDA_VERSION
+    CUDA_VERSION=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader,nounits)
+    if [ -z "$CUDA_VERSION" ]; then
+        log "Ошибка: не удалось определить версию CUDA с помощью nvidia-smi."
+        return 1
     fi
+    log "Обнаружена версия драйвера NVIDIA: $CUDA_VERSION"
 
-    log "Обнаружена версия CUDA: $cuda_version"
+    # Преобразуем версию драйвера в соответствующую версию CUDA
+    case "$CUDA_VERSION" in
+        525*) CUDA_VERSION="12.8" ;;
+        530*) CUDA_VERSION="12.9" ;;
+        535*) CUDA_VERSION="13.0" ;;
+        *) log "Неизвестная версия драйвера $CUDA_VERSION. Установка PyTorch без поддержки CUDA." ;;
+    esac
 
-    # Формируем URL для установки PyTorch
-    local pytorch_url="https://download.pytorch.org/whl/nightly/cu${cuda_version//./}"
-    log "Используем индекс: $pytorch_url"
-
-    # --- PyTorch nightly + соответствующая версия CUDA ---
-    local torch_packages=("torch --pre" "torchvision --pre" "torchaudio --pre")
+    # --- PyTorch nightly + CUDA ---
+    local torch_packages=( "torch --pre" "torchvision --pre" "torchaudio --pre" )
     local to_install_torch=()
     for pkg in "${torch_packages[@]}"; do
         if ! "$PYTHON_CMD" -c "
@@ -165,9 +167,9 @@ except ImportError:
     done
 
     if [ ${#to_install_torch[@]} -gt 0 ]; then
-        log "Установка/обновление PyTorch nightly + CUDA $cuda_version..."
+        log "Установка/обновление PyTorch nightly + CUDA $CUDA_VERSION..."
         "$PIP" install --upgrade --no-cache-dir "${to_install_torch[@]}" \
-            --index-url "$pytorch_url"
+            --index-url "https://download.pytorch.org/whl/nightly/cu$CUDA_VERSION"
     fi
 
     # --- xFormers из исходников ---
@@ -179,32 +181,7 @@ except ImportError:
     fi
 
     # --- Остальные пакеты ---
-    local other_packages=(
-        "accelerate>=1.2.1"
-        "numpy==1.26.4"
-        "librosa==0.10.2"
-        "moviepy"
-        "pillow>=10.3.0"
-        "scipy"
-        "color-matcher"
-        "matplotlib"
-        "huggingface_hub"
-        "mss"
-        "opencv-python"
-        "ftfy"
-        "einops"
-        "diffusers>=0.33.0"
-        "peft>=0.17.0"
-        "sentencepiece>=0.2.0"
-        "protobuf"
-        "pyloudnorm"
-        "gguf>=0.14.0"
-        "imageio-ffmpeg"
-        "av"
-        "comfy-cli"
-        "sageattention"
-    )
-
+    local other_packages=( "accelerate>=1.2.1" "numpy==1.26.4" "librosa==0.10.2" "moviepy" "pillow>=10.3.0" "scipy" "color-matcher" "matplotlib" "huggingface_hub" "mss" "opencv-python" "ftfy" "einops" "diffusers>=0.33.0" "peft>=0.17.0" "sentencepiece>=0.2.0" "protobuf" "pyloudnorm" "gguf>=0.14.0" "imageio-ffmpeg" "av" "comfy-cli" "sageattention" )
     local to_install_other=()
     for pkg in "${other_packages[@]}"; do
         if ! "$PYTHON_CMD" -c "
