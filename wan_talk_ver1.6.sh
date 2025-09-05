@@ -139,45 +139,15 @@ install_python_packages() {
 
     log "Проверка необходимых Python-модулей..."
 
-    # Список всех необходимых модулей с версиями
-    # packaging добавлен для быстрой и современной проверки версий
-    # numpy закреплен для избежания проблем с NumPy 2.0
-local requirements=(
-    "packaging"
-    "librosa==0.10.2"
-    "torch==2.4.0+cu121"  
-    "torchvision==0.19.0+cu121"
-    "torchaudio==2.4.0+cu121"
-    "xformers" 
-    "accelerate>=1.2.1" 
-    "numpy==1.26.4"
-    "moviepy"
-    "pillow>=10.3.0"
-    "scipy"
-    "color-matcher"
-    "matplotlib"
-    "huggingface_hub"
-    "mss"
-    "opencv-python"
-    "ftfy"
-    "einops"
-    "diffusers>=0.33.0"
-    "peft>=0.17.0"
-    "sentencepiece>=0.2.0"
-    "protobuf"
-    "pyloudnorm"
-    "gguf>=0.14.0"
-    "imageio-ffmpeg"
-    "av"
-    "comfy-cli"
-    "sageattention"
-)
+    # --- CUDA-специфичные пакеты для PyTorch 2.4 + CUDA 12.1 ---
+    local torch_packages=(
+        "torch==2.4.0+cu121"
+        "torchvision==0.19.0+cu121"
+        "torchaudio==2.4.0+cu121"
+    )
 
-    local packages_to_install=()
-    for req in "${requirements[@]}"; do
-        # --- NEW: Modern, fast, and reliable package version check ---
-        # This uses Python's modern 'packaging' and 'importlib.metadata' libraries,
-        # which are much faster and more reliable than the legacy 'pkg_resources'.
+    local to_install_torch=()
+    for pkg in "${torch_packages[@]}"; do
         if ! "$PYTHON_CMD" -c "
 import sys
 from importlib.metadata import version, PackageNotFoundError
@@ -186,23 +156,77 @@ try:
     req = Requirement(sys.argv[1])
     installed_version = version(req.name)
     if req.specifier.contains(installed_version):
-        sys.exit(0) # Success: package is installed and version is correct
+        sys.exit(0)
 except PackageNotFoundError:
-    pass # Package not found, needs installation
-except Exception:
-    pass # Any other error, assume it needs installation
-sys.exit(1) # Failure: package needs to be installed or updated
-" "$req"; then
-            log "-> Требуется установка/обновление: '$req'."
-            packages_to_install+=("$req")
+    pass
+sys.exit(1)
+" "$pkg"; then
+            log "-> Требуется установка/обновление: '$pkg'."
+            to_install_torch+=("$pkg")
         else
-            log "-> Модуль уже установлен: '$req'."
+            log "-> Модуль уже установлен: '$pkg'."
         fi
     done
 
-    if [ ${#packages_to_install[@]} -gt 0 ]; then
-        log "Установка/обновление ${#packages_to_install[@]} модулей..."
-        "$PIP" install --upgrade --no-cache-dir "${packages_to_install[@]}"
+    if [ ${#to_install_torch[@]} -gt 0 ]; then
+        log "Установка/обновление ${#to_install_torch[@]} CUDA-зависимых пакетов..."
+        "$PIP" install --upgrade --no-cache-dir "${to_install_torch[@]}" \
+            --index-url https://download.pytorch.org/whl/cu121
+    fi
+
+    # --- Остальные пакеты ---
+    local other_packages=(
+        "xformers"
+        "accelerate>=1.2.1"
+        "numpy==1.26.4"
+        "librosa==0.10.2"
+        "moviepy"
+        "pillow>=10.3.0"
+        "scipy"
+        "color-matcher"
+        "matplotlib"
+        "huggingface_hub"
+        "mss"
+        "opencv-python"
+        "ftfy"
+        "einops"
+        "diffusers>=0.33.0"
+        "peft>=0.17.0"
+        "sentencepiece>=0.2.0"
+        "protobuf"
+        "pyloudnorm"
+        "gguf>=0.14.0"
+        "imageio-ffmpeg"
+        "av"
+        "comfy-cli"
+        "sageattention"
+    )
+
+    local to_install_other=()
+    for pkg in "${other_packages[@]}"; do
+        if ! "$PYTHON_CMD" -c "
+import sys
+from importlib.metadata import version, PackageNotFoundError
+from packaging.requirements import Requirement
+try:
+    req = Requirement(sys.argv[1])
+    installed_version = version(req.name)
+    if req.specifier.contains(installed_version):
+        sys.exit(0)
+except PackageNotFoundError:
+    pass
+sys.exit(1)
+" "$pkg"; then
+            log "-> Требуется установка/обновление: '$pkg'."
+            to_install_other+=("$pkg")
+        else
+            log "-> Модуль уже установлен: '$pkg'."
+        fi
+    done
+
+    if [ ${#to_install_other[@]} -gt 0 ]; then
+        log "Установка/обновление ${#to_install_other[@]} остальных пакетов..."
+        "$PIP" install --upgrade --no-cache-dir "${to_install_other[@]}"
     else
         log "Все Python-модули уже установлены и соответствуют требованиям. ✨"
     fi
