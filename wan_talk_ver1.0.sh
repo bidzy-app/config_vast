@@ -145,7 +145,7 @@ install_python_packages() {
     local requirements=(
         "packaging"
         "librosa==0.10.2"
-        "torchaudio>=2.4.0"
+        "torchaudio>=2.3.0"
         "numpy==1.26.4"
         "moviepy"
         "pillow>=10.3.0"
