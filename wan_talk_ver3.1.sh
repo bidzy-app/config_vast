@@ -135,6 +135,8 @@ install_python_packages() {
     local requirements=(
         "packaging"
         "librosa"
+        "torch"
+        "torchvision"
         "torchaudio"
         "numpy==1.26.4"
         "moviepy"
