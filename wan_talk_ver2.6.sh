@@ -182,7 +182,7 @@ except ImportError:
     fi
 
     # --- Остальные пакеты ---
-    local other_packages=( "accelerate>=1.2.1" "torch==2.4" "torchvision==0.19.0" "accelerate>=0.26.0" "numpy==1.26.4" "librosa==0.10.2" "moviepy" "pillow>=10.3.0" "scipy" "color-matcher" "matplotlib" "huggingface_hub" "mss" "opencv-python" "ftfy" "einops" "diffusers>=0.33.0" "peft>=0.17.0" "sentencepiece>=0.2.0" "protobuf" "pyloudnorm" "gguf>=0.14.0" "imageio-ffmpeg" "av" "comfy-cli" "sageattention" )
+    local other_packages=( "accelerate>=1.2.1" "torch==2.7.0+cu128" "torchvision==0.22.1+cu128" "torchaudio==2.7.1+cu128" "accelerate>=0.26.0" "numpy==1.26.4" "librosa==0.10.2" "moviepy" "pillow>=10.3.0" "scipy" "color-matcher" "matplotlib" "huggingface_hub" "mss" "opencv-python" "ftfy" "einops" "diffusers>=0.33.0" "peft>=0.17.0" "sentencepiece>=0.2.0" "protobuf" "pyloudnorm" "gguf>=0.14.0" "imageio-ffmpeg" "av" "comfy-cli" "sageattention" )
     local to_install_other=()
     for pkg in "${other_packages[@]}"; do
         if ! "$PYTHON_CMD" -c "
