@@ -143,6 +143,7 @@ install_python_packages() {
         525*) CUDA_VERSION="12.8" ;;
         530*) CUDA_VERSION="12.9" ;;
         535*) CUDA_VERSION="13.0" ;;
+        570*) CUDA_VERSION="12.8" ;;  # Добавлено для драйвера 570.133.07
         *) log "Неизвестная версия драйвера $CUDA_VERSION. Установка PyTorch без поддержки CUDA." ;;
     esac
 
