@@ -56,6 +56,16 @@ CUSTOM_NODES=(
   "https://github.com/kijai/ComfyUI-KJNodes.git"
 )
 
+# Модели
+DIFFUSION_MODELS=(
+  "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/InfiniteTalk/Wan2_1-InfiniTetalk-Single_fp16.safetensors"
+  "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors"
+)
+VAE_MODELS=("https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1_VAE_bf16.safetensors")
+TEXT_ENCODERS=("https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/umt5-xxl-enc-fp8_e4m3fn.safetensors")
+CLIP_VISION_MODELS=("https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors")
+LORA_MODELS=("https://huggingface.co/lightx2v/Wan2.1-I2V-14B-480P-StepDistill-CfgDistill-Lightx2v/resolve/main/loras/Wan21_I2V_14B_lightx2v_cfg_step_distill_lora_rank64.safetensors")
+
 log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
 
 provisioning_print_header() {
@@ -129,50 +139,14 @@ install_python_packages() {
 
     log "Проверка необходимых Python-модулей..."
 
-    # --- PyTorch nightly + CUDA 12.1 для RTX 5090 ---
-    local torch_packages=(
-        "torch --pre"
-        "torchvision --pre"
-        "torchaudio --pre"
-    )
-
-    local to_install_torch=()
-    for pkg in "${torch_packages[@]}"; do
-        if ! "$PYTHON_CMD" -c "
-import sys
-from importlib.metadata import version, PackageNotFoundError
-try:
-    import torch
-    sys.exit(0)
-except ImportError:
-    sys.exit(1)
-"; then
-            log "-> Требуется установка/обновление: '$pkg'."
-            to_install_torch+=("$pkg")
-        else
-            log "-> PyTorch уже установлен."
-        fi
-    done
-
-    if [ ${#to_install_torch[@]} -gt 0 ]; then
-        log "Установка/обновление PyTorch nightly + CUDA 12.1..."
-        "$PIP" install --upgrade --no-cache-dir "${to_install_torch[@]}" \
-            --index-url https://download.pytorch.org/whl/nightly/cu121
-    fi
-
-    # --- xFormers из исходников ---
-    if ! "$PYTHON_CMD" -c "import xformers" &>/dev/null; then
-        log "-> Установка xFormers из исходников под текущий PyTorch..."
-        "$PIP" install --upgrade --no-cache-dir git+https://github.com/facebookresearch/xformers.git
-    else
-        log "-> xFormers уже установлен."
-    fi
-
-    # --- Остальные пакеты ---
-    local other_packages=(
-        "accelerate>=1.2.1"
-        "numpy==1.26.4"
+    # Список всех необходимых модулей с версиями
+    # packaging добавлен для быстрой и современной проверки версий
+    # numpy закреплен для избежания проблем с NumPy 2.0
+    local requirements=(
+        "packaging"
         "librosa==0.10.2"
+        "torchaudio>=2.3.0"
+        "numpy==1.26.4"
         "moviepy"
         "pillow>=10.3.0"
         "scipy"
@@ -182,6 +156,7 @@ except ImportError:
         "mss"
         "opencv-python"
         "ftfy"
+        "accelerate>=1.2.1"
         "einops"
         "diffusers>=0.33.0"
         "peft>=0.17.0"
@@ -192,11 +167,13 @@ except ImportError:
         "imageio-ffmpeg"
         "av"
         "comfy-cli"
-        "sageattention"
     )
 
-    local to_install_other=()
-    for pkg in "${other_packages[@]}"; do
+    local packages_to_install=()
+    for req in "${requirements[@]}"; do
+        # --- NEW: Modern, fast, and reliable package version check ---
+        # This uses Python's modern 'packaging' and 'importlib.metadata' libraries,
+        # which are much faster and more reliable than the legacy 'pkg_resources'.
         if ! "$PYTHON_CMD" -c "
 import sys
 from importlib.metadata import version, PackageNotFoundError
@@ -205,21 +182,23 @@ try:
     req = Requirement(sys.argv[1])
     installed_version = version(req.name)
     if req.specifier.contains(installed_version):
-        sys.exit(0)
+        sys.exit(0) # Success: package is installed and version is correct
 except PackageNotFoundError:
-    pass
-sys.exit(1)
-" "$pkg"; then
-            log "-> Требуется установка/обновление: '$pkg'."
-            to_install_other+=("$pkg")
+    pass # Package not found, needs installation
+except Exception:
+    pass # Any other error, assume it needs installation
+sys.exit(1) # Failure: package needs to be installed or updated
+" "$req"; then
+            log "-> Требуется установка/обновление: '$req'."
+            packages_to_install+=("$req")
         else
-            log "-> Модуль уже установлен: '$pkg'."
+            log "-> Модуль уже установлен: '$req'."
         fi
     done
 
-    if [ ${#to_install_other[@]} -gt 0 ]; then
-        log "Установка/обновление остальных пакетов..."
-        "$PIP" install --upgrade --no-cache-dir "${to_install_other[@]}"
+    if [ ${#packages_to_install[@]} -gt 0 ]; then
+        log "Установка/обновление ${#packages_to_install[@]} модулей..."
+        "$PIP" install --upgrade --no-cache-dir "${packages_to_install[@]}"
     else
         log "Все Python-модули уже установлены и соответствуют требованиям. ✨"
     fi
