@@ -130,14 +130,9 @@ install_python_packages() {
     log "Проверка необходимых Python-модулей..."
 
     # Список всех необходимых модулей с версиями
-    # packaging добавлен для быстрой и современной проверки версий
-    # numpy закреплен для избежания проблем с NumPy 2.0
     local requirements=(
         "packaging"
         "librosa"
-        "torch"
-        "torchvision"
-        "torchaudio"
         "numpy==1.26.4"
         "moviepy"
         "pillow>=10.3.0"
@@ -161,11 +156,12 @@ install_python_packages() {
         "comfy-cli"
     )
 
-    local packages_to_install=()
+    # Модули, которые всегда нужно переустанавливать
+    local force_update=( "torch" "torchvision" "torchaudio" )
+
+    local packages_to_install=("${force_update[@]}") # Сначала добавляем принудительные модули
+
     for req in "${requirements[@]}"; do
-        # --- NEW: Modern, fast, and reliable package version check ---
-        # This uses Python's modern 'packaging' and 'importlib.metadata' libraries,
-        # which are much faster and more reliable than the legacy 'pkg_resources'.
         if ! "$PYTHON_CMD" -c "
 import sys
 from importlib.metadata import version, PackageNotFoundError
@@ -174,12 +170,12 @@ try:
     req = Requirement(sys.argv[1])
     installed_version = version(req.name)
     if req.specifier.contains(installed_version):
-        sys.exit(0) # Success: package is installed and version is correct
+        sys.exit(0)
 except PackageNotFoundError:
-    pass # Package not found, needs installation
+    pass
 except Exception:
-    pass # Any other error, assume it needs installation
-sys.exit(1) # Failure: package needs to be installed or updated
+    pass
+sys.exit(1)
 " "$req"; then
             log "-> Требуется установка/обновление: '$req'."
             packages_to_install+=("$req")
