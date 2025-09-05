@@ -154,12 +154,11 @@ install_python_packages() {
         "imageio-ffmpeg"
         "av"
         "comfy-cli"
-        "xformers"
         "sageattention"
     )
 
     # Модули, которые всегда нужно переустанавливать
-    local force_update=( "torch" "torchvision" "torchaudio" )
+    local force_update=( "torch" "torchvision" "torchaudio" "xformers" )
 
     local packages_to_install=("${force_update[@]}") # Сначала добавляем принудительные модули
 
