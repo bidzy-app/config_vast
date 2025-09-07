@@ -1,41 +1,47 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 trap 'echo "[provision] ERROR on line $LINENO" >&2' ERR
+umask 022
 
-log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
+}
 
-# Нормализуем пути, устраняем ELOOP
+# Определяем пользователя, под которым будет работать comfyui (до ensure_paths)
+RUN_USER="$(awk -F= '/^\s*user=/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' /etc/supervisor/conf.d/comfyui.conf 2>/dev/null || true)"
+[ -z "$RUN_USER" ] && RUN_USER="$(id -un 1000 2>/dev/null || echo root)"
+RUN_GROUP="$(id -gn "$RUN_USER" 2>/dev/null || echo "$RUN_USER")"
+
+# Нормализуем пути, устраняем ELOOP и настраиваем права
 ensure_paths() {
-    local base="${WORKSPACE_DIR:-${WORKSPACE:-/workspace}}"
-    mkdir -p "$base"
+    BASE_DIR="${WORKSPACE_DIR:-${WORKSPACE:-/workspace}}"
+    mkdir -p "$BASE_DIR"
 
-    # реальный каталог, где будут файлы ComfyUI
-    REAL_ROOT="${COMFY_REAL_ROOT:-$base/ComfyUI}"
+    # Разрешаем «проход» по /workspace (или выбранной базе) и назначаем владельца
+    chmod 755 "$BASE_DIR" || true
+    chown "$RUN_USER":"$RUN_GROUP" "$BASE_DIR" || true
+
+    # Реальный каталог, где будет ComfyUI
+    REAL_ROOT="${COMFY_REAL_ROOT:-$BASE_DIR/ComfyUI}"
     mkdir -p "$REAL_ROOT"
+    chown -R "$RUN_USER":"$RUN_GROUP" "$REAL_ROOT" || true
+    chmod -R u+rwX,g+rX "$REAL_ROOT" || true
 
-    # Линк, который ожидают процессы/супервизор
+    # Линк, который могут ожидать процессы/супервизор
     LINK_PATH="/opt/ComfyUI"
 
-    # Если /opt/ComfyUI — зацикленный симлинк, удалим его
+    # Убираем любой симлинк (исключаем петли), а также файлы по этому пути
     if [ -L "$LINK_PATH" ]; then
-        local tgt
-        tgt="$(readlink "$LINK_PATH" || true)"
-        if [ -z "$tgt" ] || [ "$tgt" = "$LINK_PATH" ] || [ "$tgt" = "." ] || [ "$tgt" = "./" ] || [ "$tgt" = "ComfyUI" ]; then
-            rm -f "$LINK_PATH"
-        fi
+        rm -f "$LINK_PATH"
+    elif [ -e "$LINK_PATH" ] && [ ! -d "$LINK_PATH" ]; then
+        rm -f "$LINK_PATH"
     fi
 
-    # Если остался битый/петлящий объект — удалим
-    if [ -e "$LINK_PATH" ] && [ ! -d "$LINK_PATH" ] && [ ! -L "$LINK_PATH" ]; then
-        rm -f "$LINK_PATH" || true
-    fi
-
-    # Если /opt/ComfyUI — обычная папка, оставим; если ничего нет — создадим симлинк на REAL_ROOT
+    # Если по этому пути нет каталога — создаем симлинк на REAL_ROOT
     if [ ! -e "$LINK_PATH" ]; then
         ln -sfn "$REAL_ROOT" "$LINK_PATH"
     fi
 
-    # Используем реальный путь как рабочий корень
     COMFY_ROOT="$REAL_ROOT"
 }
 
@@ -77,11 +83,14 @@ create_directories() {
         "$COMFY_ROOT/models/clip_vision" \
         "$COMFY_ROOT/models/loras" \
         "$COMFY_ROOT/custom_nodes"
+    chown -R "$RUN_USER":"$RUN_GROUP" "$COMFY_ROOT" || true
+    chmod -R u+rwX,g+rX "$COMFY_ROOT" || true
 }
 
 provisioning_download() {
     local url="$1" dest="$2"
     mkdir -p "$dest"
+    chown "$RUN_USER":"$RUN_GROUP" "$dest" || true
     log "Starting download: $url -> $dest"
     if wget -nc --content-disposition --show-progress -P "$dest" "$url"; then
         log "Finished download (anon): $url"
@@ -108,19 +117,9 @@ update_comfyui() {
         git clone https://github.com/comfyanonymous/ComfyUI.git "$COMFY_ROOT" --depth 1
         (cd "$COMFY_ROOT" && git submodule update --init --recursive)
     fi
+    chown -R "$RUN_USER":"$RUN_GROUP" "$COMFY_ROOT" || true
+    chmod -R u+rwX,g+rX "$COMFY_ROOT" || true
 }
-
-# Определяем пользователя, под которым работает comfyui
-RUN_USER="$(awk -F= '/^\s*user=/{print $2; exit}' /etc/supervisor/conf.d/comfyui.conf || true)"
-[ -z "$RUN_USER" ] && RUN_USER="$(id -un 1000 2>/dev/null || echo root)"
-
-# Определяем его основную группу
-RUN_GROUP="$(id -gn "$RUN_USER" 2>/dev/null || echo "$RUN_USER")"
-
-# Применяем владельца и права для ComfyUI
-log "Setting ownership: $RUN_USER:$RUN_GROUP on $COMFY_ROOT"
-chown -R "$RUN_USER":"$RUN_GROUP" "$COMFY_ROOT" || true
-chmod u+rwx "$COMFY_ROOT"
 
 log_comfy_version() {
     if [ -d "$COMFY_ROOT/.git" ]; then
@@ -151,9 +150,11 @@ install_comfyui_requirements() {
 
 clone_custom_nodes() {
     mkdir -p "$COMFY_ROOT/custom_nodes"
+    chown "$RUN_USER":"$RUN_GROUP" "$COMFY_ROOT/custom_nodes" || true
     cd "$COMFY_ROOT/custom_nodes"
     for repo in "${CUSTOM_NODES[@]}"; do
-        dir="${repo##*/}"; dir="${dir%.git}"
+        dir="${repo##*/}"
+        dir="${dir%.git}"
         if [ ! -d "$dir" ]; then
             log "Cloning: $repo"
             git clone "$repo" "$dir" --depth 1 || git clone "$repo" "$dir"
@@ -161,6 +162,7 @@ clone_custom_nodes() {
             log "Node already exists: $dir — pulling updates"
             (cd "$dir" && git pull --ff-only || true)
         fi
+        chown -R "$RUN_USER":"$RUN_GROUP" "$dir" || true
     done
 }
 
@@ -178,7 +180,7 @@ install_python_packages() {
         "sentencepiece>=0.2.0" "protobuf" "pyloudnorm" "gguf>=0.14.0" "imageio-ffmpeg"
         "av" "comfy-cli" "sageattention"
     )
-    local force_update=( "torch" "torchvision" "torchaudio" "xformers" )
+    local force_update=("torch" "torchvision" "torchaudio" "xformers")
 
     local packages_to_install=("${force_update[@]}")
 
@@ -219,7 +221,6 @@ provisioning_start() {
     clone_custom_nodes
     install_python_packages
 
-    # Если у вас есть массивы DIFFUSION_MODELS/VAE_MODELS/... — они будут использованы.
     for url in "${DIFFUSION_MODELS[@]:-}"; do
         provisioning_download "$url" "$COMFY_ROOT/models/diffusion_models"
     done
@@ -235,6 +236,10 @@ provisioning_start() {
     for url in "${LORA_MODELS[@]:-}"; do
         provisioning_download "$url" "$COMFY_ROOT/models/loras"
     done
+
+    # Финальный проход по правам — на случай, если что-то создалось от root
+    chown -R "$RUN_USER":"$RUN_GROUP" "$COMFY_ROOT" || true
+    chmod -R u+rwX,g+rX "$COMFY_ROOT" || true
 
     provisioning_print_end
     log "Provisioning log saved to: $PROVISION_LOG"
