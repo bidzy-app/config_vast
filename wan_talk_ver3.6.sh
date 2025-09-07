@@ -110,6 +110,11 @@ update_comfyui() {
     fi
 }
 
+RUN_USER="$(awk -F= '/^\s*user=/{print $2; exit}' /etc/supervisor/conf.d/comfyui.conf || true)"
+[ -z "$RUN_USER" ] && RUN_USER="$(id -un 1000 2>/dev/null || echo root)"
+
+chown -R "$RUN_USER":"$RUN_USER" "$COMFY_ROOT" || true
+
 log_comfy_version() {
     if [ -d "$COMFY_ROOT/.git" ]; then
         local version commit_date
