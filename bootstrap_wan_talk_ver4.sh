@@ -52,3 +52,5 @@ curl -fsSL --retry 5 https://raw.githubusercontent.com/bidzy-app/config_vast/mai
   | bash >>/var/log/onstart_udp20.log 2>&1 || log "WARN: udp20 script failed"
 
 log "Bootstrap finished successfully"
+
+
