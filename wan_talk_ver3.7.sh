@@ -110,10 +110,17 @@ update_comfyui() {
     fi
 }
 
+# Определяем пользователя, под которым работает comfyui
 RUN_USER="$(awk -F= '/^\s*user=/{print $2; exit}' /etc/supervisor/conf.d/comfyui.conf || true)"
 [ -z "$RUN_USER" ] && RUN_USER="$(id -un 1000 2>/dev/null || echo root)"
 
-chown -R "$RUN_USER":"$RUN_USER" "$COMFY_ROOT" || true
+# Определяем его основную группу
+RUN_GROUP="$(id -gn "$RUN_USER" 2>/dev/null || echo "$RUN_USER")"
+
+# Применяем владельца и права для ComfyUI
+log "Setting ownership: $RUN_USER:$RUN_GROUP on $COMFY_ROOT"
+chown -R "$RUN_USER":"$RUN_GROUP" "$COMFY_ROOT" || true
+chmod u+rwx "$COMFY_ROOT"
 
 log_comfy_version() {
     if [ -d "$COMFY_ROOT/.git" ]; then
