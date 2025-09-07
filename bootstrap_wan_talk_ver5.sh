@@ -35,11 +35,11 @@ log "Stopping services..."
 supervisorctl stop comfyui caddy sshd syncthing || true
 
 # Основная подготовка
-log "Running provision script for wan_talk_ver3.4"
-if curl -fsSL --retry 5 https://raw.githubusercontent.com/bidzy-app/config_vast/main/wan_talk_ver3.4.sh -o /tmp/provision.sh; then
+log "Running provision script for wan_talk_ver3.5"
+if curl -fsSL --retry 5 https://raw.githubusercontent.com/bidzy-app/config_vast/main/wan_talk_ver3.5.sh -o /tmp/provision.sh; then
   bash /tmp/provision.sh >>/var/log/onstart_provision.log 2>&1
 else
-  log "ERROR: Failed to download wan_talk_ver3.4.sh"
+  log "ERROR: Failed to download wan_talk_ver3.5.sh"
 fi
 
 # Запуск comfyui
@@ -47,9 +47,9 @@ log "Starting comfyui via supervisor"
 supervisorctl start comfyui || log "WARN: comfyui did not start"
 
 # UDP helper
-log "Starting UDP20 helper"
-curl -fsSL --retry 5 https://raw.githubusercontent.com/bidzy-app/config_vast/main/start_server_udp20.sh \
-  | bash >>/var/log/onstart_udp20.log 2>&1 || log "WARN: udp20 script failed"
+log "Starting UDP21 helper"
+curl -fsSL --retry 5 https://raw.githubusercontent.com/bidzy-app/config_vast/main/start_server_udp21.sh \
+  | bash >>/var/log/onstart_udp21.log 2>&1 || log "WARN: udp21 script failed"
 
 log "Bootstrap finished successfully"
 
