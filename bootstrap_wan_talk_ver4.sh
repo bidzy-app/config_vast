@@ -1,22 +1,31 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-log() { printf '%s %s\n' "$(date -u +'%F %T UTC')" "$*"; }
+log() {
+    printf '%s %s\n' "$(date -u +'%F %T UTC')" "$*"
+}
+
 trap 'log "ERROR: bootstrap failed on line $LINENO"' ERR
 
-# Логи в этот файл будут писаться благодаря команде в onstart
-log "Bootstrap started inside the script"
+log "Bootstrap started"
 
-# Ждем запуска supervisor, который был запущен командой onstart
-log "Waiting for supervisor socket..."
-for i in {1..60}; do
-  [[ -S /var/run/supervisor.sock ]] && break
-  log "Waiting... ($i/60)"
-  sleep 1
+SUP_SOCK=${SUP_SOCK:-/var/run/supervisor.sock}
+log "Waiting for supervisor socket at $SUP_SOCK ..."
+
+for i in {1..90}; do
+    if [[ -S "$SUP_SOCK" ]]; then
+        break
+    fi
+
+    if (( i % 10 == 0 )); then
+        log "Still waiting... ($i/90)"
+    fi
+
+    sleep 1
 done
 
-if ! [[ -S /var/run/supervisor.sock ]]; then
-    log "ERROR: Supervisor socket not found after 60 seconds."
+if [[ ! -S "$SUP_SOCK" ]]; then
+    log "Supervisor socket not found after 90 seconds."
     exit 1
 fi
 log "Supervisor is running."
