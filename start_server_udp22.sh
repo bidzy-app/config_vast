@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-trap 'echo "[start_server_udp20] ERROR on line $LINENO"; exit 1' ERR
+trap 'echo "[start_server_udp22] ERROR on line $LINENO"; exit 1' ERR
 
 # Директории по умолчанию (предпочитаем WORKSPACE/WORKSPACE_DIR, далее /workspace)
 BASE_DIR="${WORKSPACE_DIR:-${WORKSPACE:-/workspace}}"
@@ -27,7 +27,7 @@ export UNSECURED=false
 # Дублируем вывод в лог
 exec &> >(tee -a "$DEBUG_LOG")
 
-echo "start_server_udp20.sh"; date
+echo "start_server_udp22.sh"; date
 
 echo_var() { echo "$1: ${!1}"; }
 for v in BACKEND REPORT_ADDR WORKER_PORT INTERNAL_PORT WORKSPACE_DIR SERVER_DIR ENV_PATH DEBUG_LOG PYWORKER_LOG MODEL_LOG USE_SSL; do

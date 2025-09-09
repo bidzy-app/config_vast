@@ -47,9 +47,9 @@ log "Starting comfyui via supervisor"
 supervisorctl start comfyui || log "WARN: comfyui did not start"
 
 # UDP helper
-log "Starting UDP21 helper"
-curl -fsSL --retry 5 https://raw.githubusercontent.com/bidzy-app/config_vast/main/start_server_udp21.sh \
-  | bash >>/var/log/onstart_udp21.log 2>&1 || log "WARN: udp21 script failed"
+log "Starting UDP22 helper"
+curl -fsSL --retry 5 https://raw.githubusercontent.com/bidzy-app/config_vast/main/start_server_udp22.sh \
+  | bash >>/var/log/onstart_udp22.log 2>&1 || log "WARN: udp22 script failed"
 
 log "Bootstrap finished successfully"
 
