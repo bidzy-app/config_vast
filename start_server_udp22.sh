@@ -48,7 +48,7 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 if [ ! -d "$SERVER_DIR" ]; then
-    git clone "${PYWORKER_REPO:-https://github.com/bidzy-app/vast-pyworker}" "$SERVER_DIR"
+    git clone "${PYWORKER_REPO:-https://github.com/vast-ai/pyworker}" "$SERVER_DIR"
 fi
 
 if [ -n "${PYWORKER_REF:-}" ]; then
