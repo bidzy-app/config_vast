@@ -17,29 +17,39 @@ ensure_paths() {
     BASE_DIR="${WORKSPACE_DIR:-${WORKSPACE:-/workspace}}"
     mkdir -p "$BASE_DIR"
 
-    # Разрешаем «проход» по /workspace (или выбранной базе) и назначаем владельца
     chmod 755 "$BASE_DIR" || true
     chown "$RUN_USER":"$RUN_GROUP" "$BASE_DIR" || true
 
-    # Реальный каталог, где будет ComfyUI
     REAL_ROOT="${COMFY_REAL_ROOT:-$BASE_DIR/ComfyUI}"
+    LINK_PATH="/opt/ComfyUI"
+
+    # Нормализуем пути
+    RR="$(readlink -m "$REAL_ROOT")"
+    LP="$(readlink -m "$LINK_PATH")"
+
+    # Если REAL_ROOT фактически указывает на LINK_PATH — выберем отдельный реальный каталог,
+    # чтобы не создавать цикл /opt <-> /workspace.
+    if [ "$RR" = "$LP" ]; then
+        REAL_ROOT="${BASE_DIR}/ComfyUI.real"
+        RR="$(readlink -m "$REAL_ROOT")"
+    fi
+
+    # REAL_ROOT должен быть реальным каталогом, не симлинком
+    [ -L "$REAL_ROOT" ] && rm -f "$REAL_ROOT"
     mkdir -p "$REAL_ROOT"
     chown -R "$RUN_USER":"$RUN_GROUP" "$REAL_ROOT" || true
     chmod -R u+rwX,g+rX "$REAL_ROOT" || true
 
-    # Линк, который могут ожидать процессы/супервизор
-    LINK_PATH="/opt/ComfyUI"
-
-    # Убираем любой симлинк (исключаем петли), а также файлы по этому пути
-    if [ -L "$LINK_PATH" ]; then
-        rm -f "$LINK_PATH"
-    elif [ -e "$LINK_PATH" ] && [ ! -d "$LINK_PATH" ]; then
-        rm -f "$LINK_PATH"
-    fi
-
-    # Если по этому пути нет каталога — создаем симлинк на REAL_ROOT
-    if [ ! -e "$LINK_PATH" ]; then
-        ln -sfn "$REAL_ROOT" "$LINK_PATH"
+    # Готовим /opt/ComfyUI:
+    # - если мы выбрали /opt/ComfyUI в качестве реального корня, то просто убеждаемся, что это директория
+    # - иначе создаём линк /opt/ComfyUI -> REAL_ROOT
+    if [ "$RR" = "$LP" ]; then
+        mkdir -p "$LINK_PATH"
+    else
+        if [ -L "$LINK_PATH" ] || { [ -e "$LINK_PATH" ] && [ ! -d "$LINK_PATH" ]; }; then
+            rm -f "$LINK_PATH"
+        fi
+        [ ! -e "$LINK_PATH" ] && ln -sfn "$REAL_ROOT" "$LINK_PATH"
     fi
 
     COMFY_ROOT="$REAL_ROOT"
