@@ -12,47 +12,22 @@ RUN_USER="$(awk -F= '/^\s*user=/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit
 [ -z "$RUN_USER" ] && RUN_USER="$(id -un 1000 2>/dev/null || echo root)"
 RUN_GROUP="$(id -gn "$RUN_USER" 2>/dev/null || echo "$RUN_USER")"
 
-# Нормализуем пути, устраняем ELOOP и настраиваем права
+# Нормализуем пути: делаем /opt/ComfyUI реальным каталогом (без симлинков)
 ensure_paths() {
     BASE_DIR="${WORKSPACE_DIR:-${WORKSPACE:-/workspace}}"
     mkdir -p "$BASE_DIR"
-
     chmod 755 "$BASE_DIR" || true
     chown "$RUN_USER":"$RUN_GROUP" "$BASE_DIR" || true
 
-    REAL_ROOT="${COMFY_REAL_ROOT:-$BASE_DIR/ComfyUI}"
     LINK_PATH="/opt/ComfyUI"
-
-    # Нормализуем пути
-    RR="$(readlink -m "$REAL_ROOT")"
-    LP="$(readlink -m "$LINK_PATH")"
-
-    # Если REAL_ROOT фактически указывает на LINK_PATH — выберем отдельный реальный каталог,
-    # чтобы не создавать цикл /opt <-> /workspace.
-    if [ "$RR" = "$LP" ]; then
-        REAL_ROOT="${BASE_DIR}/ComfyUI.real"
-        RR="$(readlink -m "$REAL_ROOT")"
+    if [ -L "$LINK_PATH" ] || { [ -e "$LINK_PATH" ] && [ ! -d "$LINK_PATH" ]; }; then
+        rm -f "$LINK_PATH"
     fi
+    mkdir -p "$LINK_PATH"
+    chown -R "$RUN_USER":"$RUN_GROUP" "$LINK_PATH" || true
+    chmod -R u+rwX,g+rX "$LINK_PATH" || true
 
-    # REAL_ROOT должен быть реальным каталогом, не симлинком
-    [ -L "$REAL_ROOT" ] && rm -f "$REAL_ROOT"
-    mkdir -p "$REAL_ROOT"
-    chown -R "$RUN_USER":"$RUN_GROUP" "$REAL_ROOT" || true
-    chmod -R u+rwX,g+rX "$REAL_ROOT" || true
-
-    # Готовим /opt/ComfyUI:
-    # - если мы выбрали /opt/ComfyUI в качестве реального корня, то просто убеждаемся, что это директория
-    # - иначе создаём линк /opt/ComfyUI -> REAL_ROOT
-    if [ "$RR" = "$LP" ]; then
-        mkdir -p "$LINK_PATH"
-    else
-        if [ -L "$LINK_PATH" ] || { [ -e "$LINK_PATH" ] && [ ! -d "$LINK_PATH" ]; }; then
-            rm -f "$LINK_PATH"
-        fi
-        [ ! -e "$LINK_PATH" ] && ln -sfn "$REAL_ROOT" "$LINK_PATH"
-    fi
-
-    COMFY_ROOT="$REAL_ROOT"
+    COMFY_ROOT="$LINK_PATH"
 }
 
 ensure_paths
@@ -114,7 +89,9 @@ create_directories() {
         "$COMFY_ROOT/models/text_encoders" \
         "$COMFY_ROOT/models/clip_vision" \
         "$COMFY_ROOT/models/loras" \
-        "$COMFY_ROOT/custom_nodes"
+        "$COMFY_ROOT/custom_nodes" \
+        "$COMFY_ROOT/input" \
+        "$COMFY_ROOT/output"
     chown -R "$RUN_USER":"$RUN_GROUP" "$COMFY_ROOT" || true
     chmod -R u+rwX,g+rX "$COMFY_ROOT" || true
 }
@@ -169,12 +146,7 @@ log_comfy_version() {
 }
 
 install_comfyui_requirements() {
-    local PYTHON_BIN
-    if [ -x "$COMFY_ROOT/python_embeded/python.exe" ]; then
-        PYTHON_BIN="$COMFY_ROOT/python_embeded/python.exe"
-    else
-        PYTHON_BIN="/opt/micromamba/envs/comfyui/bin/python"
-    fi
+    local PYTHON_BIN="/opt/micromamba/envs/comfyui/bin/python"
     log "Installing ComfyUI requirements with $PYTHON_BIN..."
     "$PYTHON_BIN" -s -m pip install --upgrade pip setuptools wheel
     "$PYTHON_BIN" -s -m pip install -r "$COMFY_ROOT/requirements.txt"
@@ -185,8 +157,7 @@ clone_custom_nodes() {
     chown "$RUN_USER":"$RUN_GROUP" "$COMFY_ROOT/custom_nodes" || true
     cd "$COMFY_ROOT/custom_nodes"
     for repo in "${CUSTOM_NODES[@]}"; do
-        dir="${repo##*/}"
-        dir="${dir%.git}"
+        dir="${repo##*/}"; dir="${dir%.git}"
         if [ ! -d "$dir" ]; then
             log "Cloning: $repo"
             git clone "$repo" "$dir" --depth 1 || git clone "$repo" "$dir"
@@ -200,8 +171,7 @@ clone_custom_nodes() {
 
 install_python_packages() {
     local PIP="/opt/micromamba/envs/comfyui/bin/pip"
-    local PYTHON_CMD
-    PYTHON_CMD="$(dirname "$PIP")/python"
+    local PYTHON_CMD="$(dirname "$PIP")/python"
 
     log "Проверка необходимых Python-модулей..."
 
@@ -269,7 +239,6 @@ provisioning_start() {
         provisioning_download "$url" "$COMFY_ROOT/models/loras"
     done
 
-    # Финальный проход по правам — на случай, если что-то создалось от root
     chown -R "$RUN_USER":"$RUN_GROUP" "$COMFY_ROOT" || true
     chmod -R u+rwX,g+rX "$COMFY_ROOT" || true
 

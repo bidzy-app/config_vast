@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 trap 'echo "[start_server_udp22] ERROR on line $LINENO"; exit 1' ERR
 
-# Директории по умолчанию (предпочитаем WORKSPACE/WORKSPACE_DIR, далее /workspace)
 BASE_DIR="${WORKSPACE_DIR:-${WORKSPACE:-/workspace}}"
 WORKSPACE_DIR="$BASE_DIR"
 SERVER_DIR="$WORKSPACE_DIR/vast-pyworker"
@@ -19,12 +18,10 @@ INTERNAL_PORT="${INTERNAL_PORT:-18188}"
 mkdir -p "$WORKSPACE_DIR"
 cd "$WORKSPACE_DIR"
 
-# Проброс внешнего TCP-порта
 printf -v VAST_VAR "VAST_TCP_PORT_%s" "$INTERNAL_PORT"
 export "$VAST_VAR"="$WORKER_PORT"
 export UNSECURED=false
 
-# Дублируем вывод в лог
 exec &> >(tee -a "$DEBUG_LOG")
 
 echo "start_server_udp22.sh"; date
@@ -40,7 +37,6 @@ if [ "$BACKEND" = "comfyui" ] && [ -z "${COMFY_MODEL:-}" ]; then
     echo "For comfyui backend, COMFY_MODEL must be set!" && exit 1
 fi
 
-# Подготовка окружения
 if ! command -v uv >/dev/null 2>&1; then
     curl -LsSf https://astral.sh/uv/install.sh | sh
     [ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env" || true
