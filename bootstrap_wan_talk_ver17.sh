@@ -32,46 +32,50 @@ fi
 log "Starting comfyui via supervisor"
 supervisorctl start comfyui || log "WARN: comfyui did not start"
 
-# Универсальный экспорт портов наружу
-# - Если Comfy слушает только на 127.0.0.1, socat откроет порт на интерфейсном IP.
-# - Открываем оба варианта внутреннего порта (18188 и 8188) и шлём на COMFYUI_PORT.
+# Дадим пару секунд на старт
+sleep 2
+
+# Универсальный экспорт портов наружу через socat.
+# Открываем оба варианта внутреннего порта (18188 и 8188) и шлём на COMFYUI_PORT (по умолчанию 18188).
 COMFYUI_PORT="${COMFYUI_PORT:-18188}"
 
 ensure_iface_proxy() {
   local SRC_PORT="$1" DST_PORT="$2"
-  # Установим инструменты при необходимости
+
+  # Пакеты для сети/прокси
   if ! command -v socat >/dev/null 2>&1 || ! command -v ip >/dev/null 2>&1; then
     log "Installing networking tools (socat, iproute2, net-tools)"
     apt-get update -y >/dev/null 2>&1 || true
     apt-get install -y socat iproute2 net-tools >/dev/null 2>&1 || true
   fi
 
-  # Определим первый глобальный IPv4 интерфейса контейнера
+  # Первый глобальный IPv4 адрес контейнера
   local IFACE_IP
   IFACE_IP="$(ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -n1)"
+
   if [[ -z "$IFACE_IP" ]]; then
     log "WARN: could not determine container interface IP; skipping proxy for ${SRC_PORT}"
     return 0
   fi
 
-  # Уже слушает?
+  # Уже слушает на интерфейсе?
   if (netstat -tulnp 2>/dev/null || ss -ltnp 2>/dev/null) | grep -qE "${IFACE_IP}:${SRC_PORT}\b"; then
     log "Proxy already listening on ${IFACE_IP}:${SRC_PORT}"
     return 0
   fi
 
-  # Поднимем прокси
+  # Запускаем прокси: IFACE_IP:SRC_PORT -> 127.0.0.1:DST_PORT
   log "Starting iface proxy ${IFACE_IP}:${SRC_PORT} -> 127.0.0.1:${DST_PORT}"
   nohup socat TCP-LISTEN:${SRC_PORT},bind="${IFACE_IP}",fork,reuseaddr TCP:127.0.0.1:${DST_PORT} \
     >/var/log/port${SRC_PORT}_iface_proxy.log 2>&1 &
 }
 
-# Открываем 18188 -> COMFYUI_PORT (по умолчанию 18188)
+# Всегда открываем 18188 -> COMFYUI_PORT (обычно 18188)
 ensure_iface_proxy 18188 "${COMFYUI_PORT}"
 # И дублируем 8188 -> COMFYUI_PORT (если провайдер внезапно маппит внешний 18188 на внутренний 8188)
 ensure_iface_proxy 8188 "${COMFYUI_PORT}"
 
-# Для телеметрии/воркера (опционально)
+# Доп. сервис воркера/телеметрии (опционально)
 log "Starting UDP helper"
 if curl -fsSL --retry 5 https://raw.githubusercontent.com/bidzy-app/config_vast/main/start_server_udp24.sh -o /tmp/start_udp.sh; then
   bash /tmp/start_udp.sh >>/var/log/onstart_udp22.log 2>&1 || log "WARN: udp helper script failed"
