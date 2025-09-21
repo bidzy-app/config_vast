@@ -19,11 +19,11 @@ log "Supervisor is running."
 log "Stopping services..."
 supervisorctl stop comfyui caddy sshd syncthing || true
 
-log "Running provision script for wan_talk_ver4.0"
-if curl -fsSL --retry 5 https://raw.githubusercontent.com/bidzy-app/config_vast/main/wan_talk_ver4.0.sh -o /tmp/provision.sh; then
+log "Running provision script for wan_talk_ver4.1"
+if curl -fsSL --retry 5 https://raw.githubusercontent.com/bidzy-app/config_vast/main/wan_talk_ver4.1.sh -o /tmp/provision.sh; then
   bash /tmp/provision.sh >>/var/log/onstart_provision.log 2>&1
 else
-  log "ERROR: Failed to download wan_talk_ver4.0.sh"
+  log "ERROR: Failed to download wan_talk_ver4.1.sh"
 fi
 
 log "Starting comfyui via supervisor"
