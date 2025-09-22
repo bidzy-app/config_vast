@@ -54,7 +54,10 @@ wait_comfy_ready_pick_port(){
 }
 
 ensure_iface_proxy(){ local SRC="$1" DST="$2"; [ -z "$SRC" ] || [ -z "$DST" ] && return 0
-  if (ss -ltnp 2>/dev/null || netstat -tulpn 2>/dev/null) | grep -qE ":${SRC}\b"; then log "Proxy/listener already present on :${SRC}"; return 0; fi
+  if (ss -ltnp 2>/dev/null || netstat -tulpn 2>/dev/null) | \
+   grep -qE "((^|[[:space:]])0\.0\.0\.0:${SRC}\b|(^|[[:space:]])\*:${SRC}\b|(^|[[:space:]])\[::\]:${SRC}\b)"; then
+  log "Public listener present on :${SRC}"; return 0
+fi
   log "Starting TCP proxy 0.0.0.0:${SRC} -> 127.0.0.1:${DST}"
   nohup socat TCP-LISTEN:"${SRC}",fork,reuseaddr TCP:127.0.0.1:"${DST}" >/var/log/port${SRC}_proxy.log 2>&1 & disown || true
   sleep 1
@@ -74,23 +77,40 @@ setup_logtail(){
 }
 
 start_wrapper_shim(){
-  if (ss -ltnp 2>/dev/null || netstat -tulpn 2>/dev/null) | grep -qE ':18288\b'; then log "Wrapper shim: port 18288 already in use, skipping"; return 0; fi
+  if (ss -ltnp 2>/dev/null || netstat -tulpn 2>/dev/null) | grep -qE ':18288\b'; then
+    log "Wrapper shim: port 18288 already in use, skipping"; return 0
+  fi
   cat >/usr/local/bin/comfyui_wrapper_shim.py <<'PY'
 #!/usr/bin/env python3
-import json, time
+import json, time, subprocess
+from urllib.parse import urlsplit, parse_qsl
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import requests
 COMFY = "http://127.0.0.1:18188"
+LOGS = {
+  "pyworker": "/workspace/pyworker.log",
+  "provision": "/var/log/onstart_provision.log",
+  "bootstrap": "/var/log/onstart_bootstrap.log",
+  "udp": "/var/log/onstart_udp28.log",
+  "model": "/workspace/logtail.log",
+}
 class Handler(BaseHTTPRequestHandler):
-    def _send(self, code=200, obj=None):
+    def _send_json(self, code=200, obj=None):
         self.send_response(code); self.send_header("Content-Type","application/json"); self.end_headers()
-        if obj is None: obj={"status":"success"}
+        if obj is None: obj={"ok":True}
         try: self.wfile.write(json.dumps(obj).encode("utf-8"))
         except BrokenPipeError: pass
-    def log_message(self, fmt, *args): return
+    def log_message(self, *a, **k): return
     def do_GET(self):
-        if self.path=="/health": self._send(200,{"ok":True})
-        else: self._send(404,{"error":"not found"})
+        if self.path=="/health": return self._send_json(200,{"ok":True})
+        if self.path.startswith("/logs"):
+            qs=dict(parse_qsl(urlsplit(self.path).query)); name=qs.get("f","pyworker"); n=int(qs.get("n","200"))
+            path=LOGS.get(name,"/workspace/pyworker.log")
+            try: out=subprocess.check_output(["tail","-n",str(n),path], text=True, timeout=3)
+            except Exception: out="(no log)"
+            self.send_response(200); self.send_header("Content-Type","text/plain; charset=utf-8"); self.end_headers()
+            return self.wfile.write(out.encode("utf-8"))
+        return self._send_json(404,{"error":"not found"})
     def do_POST(self):
         length=int(self.headers.get("Content-Length","0") or "0")
         raw=self.rfile.read(length) if length else b"{}"
@@ -107,10 +127,10 @@ class Handler(BaseHTTPRequestHandler):
                         if h.ok and h.text and h.text!="{}": break
                         time.sleep(1)
                 except Exception: pass
-            self._send(200,{"status":"success"})
-        else: self._send(404,{"error":"not found"})
+            return self._send_json(200,{"status":"submitted"})
+        return self._send_json(404,{"error":"not found"})
 def main():
-    srv=HTTPServer(("127.0.0.1",18288),Handler); print("shim listening on 127.0.0.1:18288 ->",COMFY,flush=True)
+    srv=HTTPServer(("127.0.0.1",18288),Handler)
     try: srv.serve_forever()
     except KeyboardInterrupt: pass
 if __name__=="__main__": main()
@@ -190,9 +210,11 @@ main(){
   ensure_iface_proxy 8188  "$INTERNAL_PORT"
 
   start_wrapper_shim
+  ensure_iface_proxy 18288 18288
   setup_logtail
   print_listeners
   maybe_start_pyworker
   log "Bootstrap finished successfully"
+  sleep 1; ensure_iface_proxy "$WORKER_PORT" "$WORKER_PORT"
 }
 main "$@"
