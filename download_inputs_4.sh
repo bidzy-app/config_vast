@@ -31,9 +31,7 @@ LOGF=/var/log/input_downloads.log
 
   INP="$ROOT/input"
 
-  # Пытаемся «протолкнуть» файлы в целевой input, учитывая возможные гонки и петлящие симлинки
   for i in $(seq 1 60); do
-    # Чиним петлящий симлинк /opt/ComfyUI -> /opt/ComfyUI, если вдруг появился
     if [ -L "$ROOT" ] && [ "$(readlink "$ROOT" || true)" = "$ROOT" ]; then
       echo "Fixing self-symlink at $ROOT"
       unlink "$ROOT" || true
@@ -43,7 +41,6 @@ LOGF=/var/log/input_downloads.log
 
     mkdir -p "$INP" 2>/dev/null || true
 
-    # Копируем, если есть что копировать
     copied=0
     if [ -n "$IFN" ] && [ -f "$STAGE/$IFN" ]; then
       cp -f "$STAGE/$IFN" "$INP/$IFN" 2>/dev/null && copied=1 || true
@@ -52,15 +49,12 @@ LOGF=/var/log/input_downloads.log
       cp -f "$STAGE/$AFN" "$INP/$AFN" 2>/dev/null && copied=1 || true
     fi
 
-    # Пишем json c именами (могут быть пустыми — это нормально)
     printf '{"image":"%s","audio":"%s"}\n' "${IFN:-}" "${AFN:-}" > "$INP/.inputs.json" 2>/dev/null || true
 
-    # Если хотя бы один файл на месте — хватит ждать
     if [ $copied -eq 1 ] || [ -f "$INP/$IFN" ] || [ -f "$INP/$AFN" ]; then
       echo "Inputs placed into $INP"
       break
     fi
-
     sleep 2
   done
 
