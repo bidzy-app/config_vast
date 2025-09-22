@@ -77,10 +77,10 @@ ensure_iface_proxy 8188 "${COMFYUI_PORT}"
 
 # Доп. сервис воркера/телеметрии (опционально)
 log "Starting UDP helper"
-if curl -fsSL --retry 5 https://raw.githubusercontent.com/bidzy-app/config_vast/main/start_server_udp24.sh -o /tmp/start_udp.sh; then
-  bash /tmp/start_udp.sh >>/var/log/onstart_udp22.log 2>&1 || log "WARN: udp helper script failed"
+if curl -fsSL --retry 5 https://raw.githubusercontent.com/bidzy-app/config_vast/main/start_server_udp25.sh -o /tmp/start_udp.sh; then
+  bash /tmp/start_udp.sh >>/var/log/onstart_udp25.log 2>&1 || log "WARN: udp helper script failed"
 else
-  log "WARN: failed to download start_server_udp24.sh"
+  log "WARN: failed to download start_server_udp25.sh"
 fi
 
 # Немного диагностики в лог
