@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# start_server_udp26.sh — прямой comfyui-бэкенд на 18188, единый MODEL_LOG, автоподбор COMFY_MODEL
+# start_server_udp27.sh — прямой comfyui-бэкенд на 18188, единый MODEL_LOG, автоподбор COMFY_MODEL
 set -Eeuo pipefail
-trap 'echo "[start_server_udp26] ERROR on line $LINENO" >&2; exit 1' ERR
+trap 'echo "[start_server_udp27] ERROR on line $LINENO" >&2; exit 1' ERR
 
 BASE_DIR="${WORKSPACE_DIR:-${WORKSPACE:-/workspace}}"
 WORKSPACE_DIR="$BASE_DIR"
@@ -28,7 +28,7 @@ export UNSECURED="${UNSECURED:-false}"
 
 exec &> >(tee -a "$DEBUG_LOG")
 
-echo "start_server_udp26.sh"; date
+echo "start_server_udp27.sh"; date
 echo "BACKEND=$BACKEND"
 echo "MODEL_SERVER_URL=$MODEL_SERVER_URL"
 echo "WORKER_PORT=$WORKER_PORT"

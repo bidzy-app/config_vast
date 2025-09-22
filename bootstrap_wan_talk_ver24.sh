@@ -15,9 +15,13 @@ MODEL_LOG_PATH="${MODEL_LOG_PATH:-/workspace/logtail.log}"
 have(){ command -v "$1" >/dev/null 2>&1; }
 
 ensure_tools(){
+  # curl, socat + net tools, python, venv, requests для shim, git для pyworker
   if ! have curl; then apt-get update -y >/dev/null 2>&1 || true; apt-get install -y curl >/dev/null 2>&1 || true; fi
   if ! have socat; then apt-get update -y >/dev/null 2>&1 || true; apt-get install -y socat net-tools iproute2 >/dev/null 2>&1 || true; fi
   if ! have python3; then apt-get update -y >/dev/null 2>&1 || true; apt-get install -y python3 >/dev/null 2>&1 || true; fi
+  dpkg -s python3-venv >/dev/null 2>&1 || (apt-get update -y >/dev/null 2>&1 && apt-get install -y python3-venv >/dev/null 2>&1) || true
+  dpkg -s python3-requests >/dev/null 2>&1 || (apt-get update -y >/dev/null 2>&1 && apt-get install -y python3-requests >/dev/null 2>&1) || true
+  if ! have git; then apt-get update -y >/dev/null 2>&1 || true; apt-get install -y git >/dev/null 2>&1 || true; fi
 }
 
 fix_loop_symlink(){
@@ -122,7 +126,7 @@ start_wrapper_shim(){
 #!/usr/bin/env python3
 import json, time
 from http.server import BaseHTTPRequestHandler, HTTPServer
-import requests, socket
+import requests
 
 COMFY = "http://127.0.0.1:18188"
 
@@ -135,7 +139,7 @@ class Handler(BaseHTTPRequestHandler):
         try: self.wfile.write(json.dumps(obj).encode("utf-8"))
         except BrokenPipeError: pass
 
-    def log_message(self, fmt, *args):  # тише в логах
+    def log_message(self, fmt, *args):
         return
 
     def do_GET(self):
@@ -155,16 +159,13 @@ class Handler(BaseHTTPRequestHandler):
             wf = (data.get("input") or {}).get("workflow_json")
             if wf:
                 try:
-                    r = requests.post(
-                        f"{COMFY}/prompt",
-                        json={"prompt": wf, "client_id": "pyworker-shim"},
-                        timeout=300,
-                    )
+                    import requests as _rq
+                    r = _rq.post(f"{COMFY}/prompt", json={"prompt": wf, "client_id": "pyworker-shim"}, timeout=300)
                     r.raise_for_status()
                     pid = (r.json() or {}).get("prompt_id", "")
                     t0 = time.time()
                     while time.time() - t0 < 8 and pid:
-                        h = requests.get(f"{COMFY}/history/{pid}", timeout=5)
+                        h = _rq.get(f"{COMFY}/history/{pid}", timeout=5)
                         if h.ok and h.text and h.text != "{}": break
                         time.sleep(1)
                 except Exception:
@@ -194,14 +195,13 @@ maybe_start_pyworker(){
     return 0
   fi
 
-  local URL="${PYWORKER_START_URL:-https://raw.githubusercontent.com/bidzy-app/config_vast/main/start_server_udp26.sh}"
+  local URL="${PYWORKER_START_URL:-https://raw.githubusercontent.com/bidzy-app/config_vast/main/start_server_udp27.sh}"
   log "Starting PyWorker via $URL"
 
   if curl -fsSL --retry 5 "$URL" -o /tmp/start_udp.sh; then
     chmod +x /tmp/start_udp.sh
 
     : "${BACKEND:=comfyui}"
-    # Не заставляем значение, авто‑подбор COMFY_MODEL сделает сам стартовый скрипт
     : "${WORKER_PORT:=3000}"
     : "${MODEL_LOG:=${MODEL_LOG_PATH:-/workspace/logtail.log}}"
     : "${USE_SSL:=false}"
@@ -222,9 +222,9 @@ maybe_start_pyworker(){
       echo "WORKER_PORT=$WORKER_PORT"
       echo "MODEL_LOG=$MODEL_LOG"
       echo "$VAST_VAR=${!VAST_VAR}"
-    } >> /var/log/onstart_udp26.log 2>&1 || true
+    } >> /var/log/onstart_udp27.log 2>&1 || true
 
-    nohup /tmp/start_udp.sh >> /var/log/onstart_udp26.log 2>&1 & disown || true
+    nohup /tmp/start_udp.sh >> /var/log/onstart_udp27.log 2>&1 & disown || true
   else
     log "WARN: failed to download ${URL##*/}"
   fi

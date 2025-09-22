@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 LOGF=/var/log/input_downloads.log
 {
-  echo "==== $(date -u) download_inputs_3.sh ===="
+  echo "==== $(date -u) download_inputs_4.sh ===="
 
   ROOT="${COMFY_REAL_ROOT:-${COMFY_ROOT:-/opt/ComfyUI}}"
   STAGE="/opt/input_cache"; mkdir -p "$STAGE"
