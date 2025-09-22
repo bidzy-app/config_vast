@@ -43,28 +43,6 @@ else
     log "HF_TOKEN detected; will be used if anonymous download fails."
 fi
 
-# Модели для автозагрузки
-DIFFUSION_MODELS=(
-    "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/InfiniteTalk/Wan2_1-InfiniTetalk-Single_fp16.safetensors?download=true"
-    "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors"
-)
-
-VAE_MODELS=(
-    "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1_VAE_bf16.safetensors"
-)
-
-TEXT_ENCODERS=(
-    "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/umt5-xxl-enc-fp8_e4m3fn.safetensors"
-)
-
-CLIP_VISION_MODELS=(
-    "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors"
-)
-
-LORA_MODELS=(
-    "https://huggingface.co/lightx2v/Wan2.1-I2V-14B-480P-StepDistill-CfgDistill-Lightx2v/resolve/main/loras/Wan21_I2V_14B_lightx2v_cfg_step_distill_lora_rank64.safetensors"
-)
-
 # Кастомные ноды
 CUSTOM_NODES=(
     "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
