@@ -113,25 +113,55 @@ setup_logtail(){
 }
 
 maybe_start_pyworker(){
-  if [ "$START_PYWORKER" != "1" ]; then
+  if [ "${START_PYWORKER:-0}" != "1" ]; then
     log "PyWorker start skipped (set START_PYWORKER=1 to enable)"
     return 0
   fi
+
   local URL="${PYWORKER_START_URL:-https://raw.githubusercontent.com/bidzy-app/config_vast/main/start_server_udp26.sh}"
   log "Starting PyWorker via $URL"
+
   if curl -fsSL --retry 5 "$URL" -o /tmp/start_udp.sh; then
     chmod +x /tmp/start_udp.sh
-    # Заполняем базовые env (можно переопределить снаружи)
-    export BACKEND="${BACKEND:-comfyui}"
-    export COMFY_MODEL="${COMFY_MODEL:-wan_talk_ver4.2}"
-    export WORKER_PORT="${WORKER_PORT:-3000}"
-    export VAST_TCP_PORT_${WORKER_PORT:0:0}$WORKER_PORT="$WORKER_PORT" || true
-    export MODEL_SERVER_URL="${MODEL_SERVER_URL:-http://127.0.0.1:18188}"
-    export MODEL_LOG="${MODEL_LOG:-$MODEL_LOG_PATH}"
-    export UNSECURED="${UNSECURED:-false}"
-    nohup /tmp/start_udp.sh >> /var/log/onstart_udp25.log 2>&1 & disown || true
+
+    # Дефолты (их можно переопределить снаружи окружением)
+    : "${BACKEND:=comfyui}"
+    if [ "$BACKEND" = "comfyui" ] && [ -z "${COMFY_MODEL:-}" ]; then
+      COMFY_MODEL="wan_talk_ver4.2"
+    fi
+
+    : "${WORKER_PORT:=3000}"
+    : "${MODEL_LOG:=${MODEL_LOG_PATH:-/workspace/logtail.log}}"
+    : "${USE_SSL:=false}"
+    : "${UNSECURED:=false}"
+
+    # Внутренний порт ComfyUI был определён ранее (18188 или 8188). Если по какой-то причине пуст — по умолчанию 18188.
+    : "${INTERNAL_PORT:=18188}"
+    : "${MODEL_SERVER_URL:=http://127.0.0.1:${INTERNAL_PORT}}"
+
+    # Экспортируем переменные для стартового скрипта
+    export BACKEND COMFY_MODEL WORKER_PORT MODEL_LOG USE_SSL UNSECURED MODEL_SERVER_URL
+
+    # Корректный экспорт переменной вида VAST_TCP_PORT_<PORT>=<PORT>
+    local VAST_VAR
+    printf -v VAST_VAR "VAST_TCP_PORT_%s" "$WORKER_PORT"
+    export "$VAST_VAR"="$WORKER_PORT"
+
+    # Немного диагностики — полезно при отладке
+    {
+      echo "== pyworker env =="
+      echo "BACKEND=$BACKEND"
+      [ -n "${COMFY_MODEL:-}" ] && echo "COMFY_MODEL=$COMFY_MODEL"
+      echo "MODEL_SERVER_URL=$MODEL_SERVER_URL"
+      echo "WORKER_PORT=$WORKER_PORT"
+      echo "MODEL_LOG=$MODEL_LOG"
+      echo "$VAST_VAR=${!VAST_VAR}"
+    } >> /var/log/onstart_udp26.log 2>&1 || true
+
+    # Стартуем в фоне
+    nohup /tmp/start_udp.sh >> /var/log/onstart_udp26.log 2>&1 & disown || true
   else
-    log "WARN: failed to download start_server_udp26.sh"
+    log "WARN: failed to download ${URL##*/}"
   fi
 }
 
