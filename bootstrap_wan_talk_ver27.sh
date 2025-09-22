@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bootstrap_wan_talk_ver26.sh
+# bootstrap_wan_talk_ver27.sh
 set -Eeuo pipefail
 log(){ printf '%s %s\n' "$(date -u +'%F %T UTC')" "$*"; }
 trap 'log "ERROR: bootstrap failed on line $LINENO"' ERR
