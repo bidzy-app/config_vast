@@ -117,7 +117,7 @@ maybe_start_pyworker(){
     log "PyWorker start skipped (set START_PYWORKER=1 to enable)"
     return 0
   fi
-  local URL="${PYWORKER_START_URL:-https://raw.githubusercontent.com/bidzy-app/config_vast/main/start_server_udp25.sh}"
+  local URL="${PYWORKER_START_URL:-https://raw.githubusercontent.com/bidzy-app/config_vast/main/start_server_udp26.sh}"
   log "Starting PyWorker via $URL"
   if curl -fsSL --retry 5 "$URL" -o /tmp/start_udp.sh; then
     chmod +x /tmp/start_udp.sh
@@ -131,7 +131,7 @@ maybe_start_pyworker(){
     export UNSECURED="${UNSECURED:-false}"
     nohup /tmp/start_udp.sh >> /var/log/onstart_udp25.log 2>&1 & disown || true
   else
-    log "WARN: failed to download start_server_udp25.sh"
+    log "WARN: failed to download start_server_udp26.sh"
   fi
 }
 
